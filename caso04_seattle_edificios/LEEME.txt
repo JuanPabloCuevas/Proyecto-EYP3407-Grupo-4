@@ -1,0 +1,32 @@
+EYP3407 - Caso 04: Seattle Building Energy Benchmarking
+Copia de datos preparada el 12 de octubre de 2026.
+
+SUBCONJUNTO ENTREGADO
+Todos los registros 2015–2024. Incluye medidas del año objetivo que deben excluirse de los predictores.
+
+ARCHIVOS Y VARIABLES
+datos.csv: registros anuales de edificios; clave osebuildingid y datayear.
+siteeui_kbtu_sf registra intensidad energética en kBtu por pie cuadrado.
+diccionario.csv: nombres, tipos y descripciones publicados por la fuente.
+Las variables del año objetivo no son automáticamente predictores disponibles.
+
+LECTURA Y USO
+Los CSV utilizan UTF-8, coma separadora y punto decimal. Los nombres y códigos
+originales se conservan. Un valor ausente no equivale a cero.
+Descomprima este paquete en datos/ de su repositorio. Trabaje exclusivamente
+con estos archivos y con la población y respuesta de la ficha del ANEXO.
+Las transformaciones y el análisis deben programarse en el repositorio del equipo.
+No es necesario descargar de nuevo las fuentes ni ejecutar código de extracción.
+
+PROCEDENCIA
+La copia entregada es el punto de partida de la reproducción. Los portales
+pueden revisar sus datos después de la descarga. Cite al productor original,
+la edición o fecha de descarga y las referencias del ANEXO. Consulte las
+condiciones de reutilización de la fuente al publicar los datos.
+
+Fuentes utilizadas en la preparación:
+caso04_pagina_0.csv
+https://data.seattle.gov/resource/teqw-tu6e.csv?%24where=datayear+%3E%3D+%272015%27+AND+datayear+%3C%3D+%272024%27&%24order=datayear%2Cosebuildingid&%24limit=50000&%24offset=0
+
+seattle_metadata.json
+https://data.seattle.gov/api/views/teqw-tu6e.json

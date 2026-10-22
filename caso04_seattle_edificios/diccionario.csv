@@ -1,0 +1,47 @@
+variable,nombre,tipo,descripcion
+osebuildingid,OSEBuildingID,text,A unique identifier assigned to each property covered by the Seattle Benchmarking Ordinance for tracking and identification purposes.
+datayear,DataYear,text,Calendar year (January-December) represented by each data record.
+buildingname,BuildingName,text,Official or common property name on record with the City of Seattle.
+buildingtype,BuildingType,text,City of Seattle high level building type classification.
+taxparcelidentificationnumber,TaxParcelIdentificationNumber,text,Property King County Parcel Identification Number (PIN).
+address,Address,text,Property street address
+city,City,text,Property city
+state,State,text,Property state
+zipcode,ZipCode,text,Property zip code
+latitude,Latitude,number,Property latitude
+longitude,Longitude,number,Property longitude
+neighborhood,Neighborhood,text,Property neighborhood area defined by the City of Seattle Department of Neighborhoods.
+councildistrictcode,CouncilDistrictCode,number,"The current City of Seattle council district in which the property is located. Boundaries are current as of the November 2023 municipal election, reflecting the 2022 decennial redistricting process."
+yearbuilt,YearBuilt,text,Year in which a property was constructed.
+numberoffloors,NumberofFloors,number,Number of occupiable floors at or above grade level. n
+numberofbuildings,NumberofBuildings,number,Number of buildings as part of each property.
+propertygfatotal,PropertyGFATotal,number,"Total building and parking gross floor area. Figure reflects Seattle OSE's confirmed property gross floor area as reported in public records like King County Assessor Data, or otherwise verified."
+propertygfabuildings,PropertyGFABuildings,number,"Total floor space in square feet between the outside surfaces of a building’s enclosing walls. This includes all areas inside the building(s), such as tenant space, common areas, stairwells, basements, storage, etc... but does not include parking. Figure reflects Seattle OSE's confirmed property gross floor area as reported in public records like King County Assessor Data, or otherwise verified."
+propertygfaparking,PropertyGFAParking,number,"Total space in square feet of all types of parking (Fully Enclosed, Partially Enclosed, and Open). Figure reflects Seattle OSE's confirmed property gross floor area as reported in public records like King County Assessor Data, or otherwise verified."
+selfreportgfatotal,SelfReportGFATotal,number,Total building and parking gross floor area. Figure based on self-reported user data in ENERGY STAR Portfolio Manager.
+selfreportgfabuildings,SelfReportGFABuildings,number,"Total floor space in square feet between the outside surfaces of a building’s enclosing walls. This includes all areas inside the building(s), such as tenant space, common areas, stairwells, basements, storage, etc... but does not include parking. Figure based on self-reported user data in ENERGY STAR Portfolio Manager."
+selfreportparking,SelfReportParking,number,"Total space in square feet of all types of parking (Fully Enclosed, Partially Enclosed, and Open).Figure based on self-reported user data in ENERGY STAR Portfolio Manager."
+energystarscore,ENERGYSTARScore,number,"An EPA calculated 1-100 rating that assesses a property’s overall energy performance, based on national data to control for differences among climate, building uses, and operations. A score of 50 represents the national median."
+siteeuiwn_kbtu_sf,SiteEUIWN(kBtu/sf),number,Weather Normalized (WN) Site Energy Use Intensity (EUI) is a property's WN Site Energy divided by its gross floor area (in square feet). WN Site Energy is the Site Energy Use the property would have consumed during 30-year average weather conditions. WN Site EUI is measured in measured in thousands of British thermal units (kBtu) per square foot.
+siteeui_kbtu_sf,SiteEUI(kBtu/sf),number,"Site Energy Use Intensity (EUI) is a property's Site Energy Use divided by its gross floor area. Site Energy Use is the annual amount of all the energy consumed by the property on-site, as reported on utility bills. Site EUI is measured in thousands of British thermal units (kBtu) per square foot."
+siteenergyuse_kbtu,SiteEnergyUse(kBtu),number,The annual amount of energy consumed by the property from all sources of energy.
+siteenergyusewn_kbtu,SiteEnergyUseWN(kBtu),number,"The annual amount of energy consumed by the property from all sources of energy, adjusted to what the property would have consumed during 30-year average weather conditions."
+sourceeuiwn_kbtu_sf,SourceEUIWN(kBtu/sf),number,Weather Normalized (WN) Source Energy Use Intensity (EUI) is a property's WN Source Energy divided by its gross floor area. WN Source Energy is the Source Energy Use the property would have consumed during 30-year average weather conditions. WN Source EUI is measured in measured in thousands of British thermal units (kBtu) per square foot.
+sourceeui_kbtu_sf,SourceEUI(kBtu/sf),number,"Source Energy Use Intensity (EUI) is a property's Source Energy Use divided by its gross floor area. Source Energy Use is the annual energy used to operate the property, including losses from generation, transmission, & distribution. Source EUI is measured in thousands of British thermal units (kBtu) per square foot."
+epapropertytype,EPAPropertyType,text,"The primary use of a property (e.g. office, retail store). Primary use is defined as a function that accounts for more than 50% of a property. This is the Property Type - EPA Calculated field from Portfolio Manager."
+largestpropertyusetype,LargestPropertyUseType,text,The largest property use type based on building gross floor area (i.e. square footage).
+largestpropertyusetypegfa,LargestPropertyUseTypeGFA,number,"The gross floor area in square feet, of the largest property use type."
+secondlargestpropertyusetype,SecondLargestPropertyUseType,text,"The second largest property use type based on building gross floor area (i.e. square footage), if applicable."
+secondlargestpropertyuse,SecondLargestPropertyUseTypeGFA,number,"The gross floor area in square feet, of the second largest property use type, if applicable."
+thirdlargestpropertyusetype,ThirdLargestPropertyUseType,text,"The third largest property use type based on building gross floor area (i.e. square footage), if applicable."
+thirdlargestpropertyusetypegfa,ThirdLargestPropertyUseTypeGFA,number,"The gross floor area in square feet, of the third largest property use type, if applicable."
+electricity_kwh,Electricity(kWh),number,"The annual amount of electricity consumed by the property on-site, including electricity purchased from the grid and generated by onsite renewable systems, measured in kWh."
+steamuse_kbtu,SteamUse(kBtu),number,"The annual amount of district steam consumed by the property on-site, measured in thousands of British thermal units (kBtu)."
+naturalgas_therms,NaturalGas(therms),number,"The annual amount of utility-supplied natural gas consumed by the property, measured in therms."
+compliancestatus,ComplianceStatus,text,"Whether a property met energy benchmarking requirements for the specified reporting year, as of the end of that reporting year's enforcement grace period."
+complianceissue,ComplianceIssue,text,"If known, what compliance issues were present for the specified reporting year at the end of that reporting year's enforcement grace period."
+electricity_kbtu,Electricity(kBtu),number,"The annual amount of electricity consumed by the property on-site, including electricity purchased from the grid and generated by onsite renewable systems, measured in thousands of British thermal units (kBtu)."
+naturalgas_kbtu,NaturalGas(kBtu),number,"The annual amount of utility-supplied natural gas consumed by the property, measured in thousands of British thermal units (kBtu)."
+totalghgemissions,TotalGHGEmissions,number,"The total amount of greenhouse gas emissions, including carbon dioxide, methane, and nitrous oxide gases released into the atmosphere as a result of energy consumption at the property, measured in metric tons of carbon dioxide equivalent. This calculation employs the utility-specific emissions factors defined in the 2023 Building Emissions Performance Standard law."
+ghgemissionsintensity,GHGEmissionsIntensity,number,"Total Greenhouse Gas Emissions divided by property's gross floor area, measured in kilograms of carbon dioxide equivalent per square foot."
+demolished,Demolished,checkbox,Whether a property has been demolished as of the 2023 reporting cycle.
