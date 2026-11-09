@@ -1,267 +1,109 @@
-dicc <- read.csv("datos/diccionario.csv")
-datos <- read.csv("datos/datos.csv", na.strings = c("", "NA"), stringsAsFactors = FALSE)
+# =============================================================================
+# EYP3407 · Caso 04 · Intensidad energética de edificios de Seattle
+# analisis.R · Punto de entrada único
+#
+# Integrantes: Juan Pablo Cuevas, Cristóbal Honorato, Michelle Houngbo, Maximiliano León
+#
+# Uso, desde la raíz del repositorio y con los datos descomprimidos en datos/:
+#   Rscript --vanilla analisis.R
+# Requiere R >= 4.1 y los paquetes dplyr (>= 1.1.0), glmnet, mgcv, ranger, rmarkdown
+# y knitr; para el informe, pandoc >= 2.0 y LaTeX (ver README.md).
+# Todas las tablas y figuras quedan en resultados/, y el informe en informe.pdf.
+# =============================================================================
 
-columnas <- c(
-  "osebuildingid", "datayear", "siteeui_kbtu_sf",
-  "largestpropertyusetype", "epapropertytype", "buildingtype",
-  "secondlargestpropertyusetype", "thirdlargestpropertyusetype",
-  "largestpropertyusetypegfa", "secondlargestpropertyuse", "thirdlargestpropertyusetypegfa",
-  "propertygfatotal", "propertygfabuildings", "propertygfaparking",
-  "yearbuilt", "numberoffloors", "numberofbuildings",
-  "neighborhood", "zipcode"
-)
-base <- datos[, columnas]
+t_inicio <- proc.time()[["elapsed"]]
 
-
-# ================================================================
-# 1. TRATAMIENTO INICIAL DE LOS DATOS 
-# ================================================================
-
-# ===== 1.1 Estructura: tipo de cada variable y primeros valores =====
-
-str(base)
-
-#Corregimos los tipos de variables
-
-base$osebuildingid <- as.character(base$osebuildingid)
-categoricas <- c("largestpropertyusetype", "epapropertytype", "buildingtype",
-                 "secondlargestpropertyusetype", "thirdlargestpropertyusetype",
-                 "neighborhood", "zipcode")
-base[categoricas] <- lapply(base[categoricas], factor)
-
-str(base)
-
-#Edificios por año
-table(base$datayear)
-
-# Edificios distintos en toda la base (2015-2024)
-length(unique(base$osebuildingid))
-
-
-# ===== 1.3 Rangos y posibles valores de cada variable =====
-sort(sapply(base, function(x) length(unique(na.omit(x)))))
-
-numericas <- names(base)[sapply(base, is.numeric)]
-round(t(sapply(base[, numericas], quantile,
-               probs = c(0, 0.01, 0.5, 0.99, 1), na.rm = TRUE)), 1)
-
-#Variable respuesta 
-round(quantile(datos$siteeui_kbtu_sf, probs = c(0, 0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 1),
-               na.rm = TRUE), 1)
-round(mean(datos$siteeui_kbtu_sf, na.rm = TRUE), 1)
-
-# Su media y mediana difieren mucho, esto por que puede tomar valores muy grandes, por esta razon usaremos la mediana para las comparaciones, debido a su mayor robustes 
-
-# ===== 1.4 Datos faltantes ========
-faltantes <- data.frame(
-  n_faltantes   = colSums(is.na(base)),
-  pct_faltantes = round(100 * colMeans(is.na(base)), 1)
-)
-faltantes[order(-faltantes$pct_faltantes), ]
-
-# 1.4.1 Tratamientos para datos faltantes (predictores) ==========
-
-# Crear factor para segundo y tercer uso 
-for (v in c("secondlargestpropertyusetype", "thirdlargestpropertyusetype")) {
-  x <- as.character(base[[v]])
-  x[is.na(x)] <- "Ninguno"
-  base[[v]] <- factor(x)
+# Requisitos: se comprueban al inicio para no detenerse a mitad del análisis. Los
+# paquetes del análisis se buscan sin cargarlos, y todo ocurre antes de fijar la semilla.
+paquetes <- c("dplyr", "glmnet", "mgcv", "ranger", "rmarkdown", "knitr")
+faltan <- paquetes[!nzchar(vapply(paquetes, function(p) system.file(package = p), ""))]
+if (length(faltan) > 0) {
+  stop("Faltan paquetes de R: ", paste(faltan, collapse = ", "), ". Instálelos con install.packages(c(",
+       paste0("\"", faltan, "\"", collapse = ", "), ")).")
+}
+if (utils::packageVersion("dplyr") < "1.1.0") stop("Se requiere dplyr >= 1.1.0.")
+if (!rmarkdown::pandoc_available("2.0")) {
+  stop("El informe requiere pandoc >= 2.0, que incluyen RStudio y Quarto. Instálelo o indique ",
+       "su carpeta en la variable de entorno RSTUDIO_PANDOC (ver README.md).")
 }
 
-# Superficie del uso: NA -> 0
-for (v in c("secondlargestpropertyuse", "thirdlargestpropertyusetypegfa")) {
-  base[[v]][is.na(base[[v]])] <- 0
+set.seed(3407)
+options(width = 140)
+
+# Orden alfabético y texto independientes del idioma del equipo: el orden de las
+# categorías fija la categoría base del lasso, y las figuras llevan tildes.
+invisible(Sys.setlocale("LC_COLLATE", "C"))
+if (!isTRUE(l10n_info()[["UTF-8"]])) {
+  for (loc in c("C.UTF-8", "en_US.UTF-8", "es_CL.UTF-8")) {
+    if (nzchar(suppressWarnings(Sys.setlocale("LC_CTYPE", loc)))) break
+  }
 }
 
-# ===== 1.4.2 Datos faltantes de la respuesta y relación con el consumo, por año =====
-base$tiene_y <- !is.na(base$siteeui_kbtu_sf)
+source("R/01_base.R")   # Sección 1: base analítica, ventanas y referencia
 
-# 1. Filas con EUI (solo hasta 2021): ¿estaban sobre la mediana de su uso ese año?
-con_y <- base[base$tiene_y & !is.na(base$largestpropertyusetype) & base$datayear <= 2021, ]
-con_y$med_tipo <- ave(con_y$siteeui_kbtu_sf, con_y$datayear,
-                      as.character(con_y$largestpropertyusetype), FUN = median)
-con_y$sobre <- con_y$siteeui_kbtu_sf > con_y$med_tipo
+# Resumen en consola de la sección 1
+print(resumen_respuesta, row.names = FALSE, digits = 4)
+print(auditoria_general)
+print(auditoria_atributos, row.names = FALSE)
+print(faltantes_por_anio)
+print(cascada, row.names = FALSE)
+print(pares)
+print(altas_bajas, row.names = FALSE)
+print(saltos_desarrollo, row.names = FALSE)
+print(extremos, row.names = FALSE)
+print(as.data.frame(metricas))
+print(as.data.frame(por_historia))
 
-# 2. Para cada fila sin EUI: año más cercano en que el mismo edificio sí reportó (hasta 2021)
-sin_y <- base[!base$tiene_y, ]
-sin_y$sobre <- sapply(seq_len(nrow(sin_y)), function(i) {
-  h <- con_y[con_y$osebuildingid == sin_y$osebuildingid[i], ]
-  if (nrow(h) == 0) return(NA)                    
-  antes <- h[h$datayear < sin_y$datayear[i], ]
-  if (nrow(antes) > 0) antes$sobre[which.max(antes$datayear)] else h$sobre[which.min(h$datayear)]
-})
+source("R/02_modelos.R") # Sección 2: lasso, GAM y bosque en las tres ventanas
 
-# 3. Tabla por año
-anios <- factor(sin_y$datayear, levels = 2015:2024)
-tabla <- data.frame(
-  registros   = as.vector(table(base$datayear)),
-  sin_eui     = as.vector(tapply(!base$tiene_y, base$datayear, sum)),
-  comparados  = as.vector(tapply(!is.na(sin_y$sobre), anios, sum)),
-  pct_sobre   = as.vector(round(100 * tapply(sin_y$sobre, anios, mean, na.rm = TRUE))),
-  row.names   = 2015:2024
-)
-tabla$pct_sin_eui <- round(100 * tabla$sin_eui / tabla$registros, 1)
-tabla[, c("registros", "sin_eui", "pct_sin_eui", "comparados", "pct_sobre")]
+# Resumen en consola de la sección 2
+print(as.data.frame(elegidos))
+print(as.data.frame(comparacion), digits = 4)
+print(as.data.frame(costo))
+print(as.data.frame(dif_por_ventana), digits = 4)
+print(as.data.frame(procedimiento_elegido), digits = 4)
+print(as.data.frame(residuos_log), digits = 3)
+print(as.data.frame(residuos_por_ventana), digits = 3)
+print(as.data.frame(residuo_entren_elegidos), digits = 3)
+print(as.data.frame(cambio_anual), digits = 3)
+print(as.data.frame(por_historia_modelos), digits = 4)
+print(as.data.frame(dispersion), digits = 3)
+print(gam_k, digits = 3)
+print(gam_concurvidad, digits = 3)
+print(table(lasso_variables$ventana))
 
-# Totales y referencia
-sum(!is.na(sin_y$sobre)); round(100 * mean(sin_y$sobre, na.rm = TRUE))   
-round(100 * mean(con_y$sobre))                                           
+source("R/03_prueba.R")   # Sección 3: ajuste final y prueba 2023-2024, una sola vez
 
-#Con esto podemos concluir que no hay patrones sitematcios en los edificios con datos faltantes en el año 2021, por lo que no se esperaria un sesgo al quitarlos
+# Resumen en consola de la sección 3
+print(cascada_prueba, row.names = FALSE)
+print(pares_prueba)
+print(as.data.frame(res_prueba$metricas), digits = 4)
+print(as.data.frame(res_prueba$por_historia), digits = 4)
+print(res_prueba$incertidumbre, digits = 3)
+print(incertidumbre_desarrollo, digits = 3)
+print(res_prueba$coeficientes, digits = 3)
 
-# Tratamiento a los datos faltantes en respuesta ya se hizo, la variable tiene_y es un marcador
+source("R/04_diagnostico.R")  # Sección 4: diagnóstico, sensibilidades y figuras
 
+# Resumen en consola de la sección 4
+print(diag_tipo, digits = 4)
+print(diag_uso, digits = 4)
+print(diag_tamano, digits = 4)
+print(diag_historia, digits = 4)
+print(diag_extremos, digits = 4)
+print(as.data.frame(sesgo_extremos), digits = 4)
+print(mayores_errores, digits = 4)
+print(as.data.frame(concentracion), digits = 3)
+print(as.data.frame(error_entidad), digits = 4)
+print(as.data.frame(cambio_por_anio), digits = 3)
+print(cambio_por_tipo, digits = 3)
+print(mae_por_anio, digits = 4)
+print(as.data.frame(s1_comparacion), digits = 4)
+print(as.data.frame(s2_comparacion), digits = 4)
+print(as.data.frame(control_regla), digits = 4)
 
-# ===== 1.5 Valores sospechosos =====
-sum(base$siteeui_kbtu_sf > 1000, na.rm = TRUE)    # EUI extremas
-base[which(base$siteeui_kbtu_sf > 1000),
-     c("osebuildingid", "datayear", "largestpropertyusetype", "siteeui_kbtu_sf")]
-sum(base$propertygfaparking < 0, na.rm = TRUE)     # estacionamiento negativo
-sum(base$numberoffloors == 0, na.rm = TRUE)        # 0 pisos
-sum(base$numberofbuildings == 0, na.rm = TRUE)     # 0 edificios
-sum(base$yearbuilt == 1900, na.rm = TRUE)          
-sum(base$yearbuilt > base$datayear, na.rm = TRUE)  # construido después del registro
-sum(duplicated(base[, c("osebuildingid", "datayear")]))
+writeLines(capture.output(sessionInfo()), file.path(SALIDA, "sessionInfo.txt"))
 
-# ---- Tratamiento ----
-# Regla: EUI > 1000 y más de 10 veces la mediana de su uso principal (mediana de desarrollo, <= 2021)
-dev     <- base[base$datayear <= 2021 & !is.na(base$siteeui_kbtu_sf), ]
-med_dev <- tapply(dev$siteeui_kbtu_sf, as.character(dev$largestpropertyusetype), median)
-razon   <- base$siteeui_kbtu_sf / med_dev[as.character(base$largestpropertyusetype)]
+source("R/05_informe.R")  # Sección 5: diagramas de la muestra y del diseño, auditoría e informe
 
-error_eui <- !is.na(razon) & base$siteeui_kbtu_sf > 1000 & razon > 10
-sum(error_eui)                                                    
-base[error_eui, c("osebuildingid", "datayear", "largestpropertyusetype", "siteeui_kbtu_sf")]
-base$siteeui_kbtu_sf[error_eui] <- NA                             # se tratan como faltantes
-
-# ---- Valores imposibles en predictores ----
-base$propertygfaparking[base$propertygfaparking < 0] <- 0
-
-# ---- Respuesta: marcar (después de corregir errores) ----
-base$tiene_y <- !is.na(base$siteeui_kbtu_sf)
-
-
-# ================================================================
-# 2. CONSTRUCCIÓN DE LA BASE ANALÍTICA
-# ================================================================
-
-predictores <- c(
-  "largestpropertyusetype", "epapropertytype", "buildingtype",
-  "secondlargestpropertyusetype", "thirdlargestpropertyusetype",
-  "largestpropertyusetypegfa", "secondlargestpropertyuse", "thirdlargestpropertyusetypegfa",
-  "propertygfatotal", "propertygfabuildings", "propertygfaparking",
-  "yearbuilt", "numberoffloors", "numberofbuildings",
-  "neighborhood", "zipcode"
-)
-
-# ---- 2.1 Historia: lo observado en a-2, asignado al año objetivo a ----
-hist <- base[, c("osebuildingid", "datayear", "siteeui_kbtu_sf", predictores)]
-names(hist)[names(hist) == "siteeui_kbtu_sf"] <- "eui_lag2"
-hist$datayear <- hist$datayear + 2
-hist$en_a2 <- TRUE
-
-# ---- 2.2 Respuestas del año a ----
-resp <- base[, c("osebuildingid", "datayear", "siteeui_kbtu_sf", "tiene_y")]
-
-# ---- 2.3 Unir respuesta (a) con historia (a-2) ----
-modelo <- merge(resp, hist, by = c("osebuildingid", "datayear"), all.x = TRUE)
-modelo$en_a2[is.na(modelo$en_a2)] <- FALSE
-modelo <- modelo[modelo$datayear >= 2017, ]          # años objetivo 2017-2024
-
-# ---- 2.4 Filtros de la muestra y tabla de construcción ----
-periodo <- function(a) factor(ifelse(a <= 2021, "Desarrollo",
-                                     ifelse(a == 2022, "2022 (solo historia)", "Prueba")),
-                              levels = c("Desarrollo", "2022 (solo historia)", "Prueba"))
-
-paso1 <- modelo                                           # años objetivo 2017-2024
-paso2 <- paso1[paso1$tiene_y, ]                           # con respuesta válida
-paso3 <- paso2[paso2$en_a2, ]                             # con registro del edificio en a-2
-paso4 <- paso3[!is.na(paso3$largestpropertyusetype), ]    # con uso principal en a-2
-
-construccion <- rbind(
-  "1. Registros con año objetivo 2017-2024" = table(periodo(paso1$datayear)),
-  "2. Con respuesta válida"                 = table(periodo(paso2$datayear)),
-  "3. Con registro del edificio en a-2"     = table(periodo(paso3$datayear)),
-  "4. Con uso principal en a-2"             = table(periodo(paso4$datayear))
-)
-construccion
-
-# ---- 2.5 Variables finales ----
-analitica <- paso4
-analitica$tiene_hist <- !is.na(analitica$eui_lag2)                      
-analitica$antiguedad <- pmax(analitica$datayear - analitica$yearbuilt, 0) 
-analitica$periodo    <- periodo(analitica$datayear)
-
-categoricas <- c("largestpropertyusetype", "epapropertytype", "buildingtype",
-                 "secondlargestpropertyusetype", "thirdlargestpropertyusetype",
-                 "neighborhood", "zipcode")
-analitica[categoricas] <- lapply(analitica[categoricas], factor)
-
-# ---- 2.6 Verificaciones ----
-dim(analitica)
-sum(is.na(analitica$siteeui_kbtu_sf))       
-tapply(analitica$tiene_hist, analitica$datayear, function(x) round(100 * mean(x), 1))
-
-pasos <- list(paso1, paso2, paso3, paso4)
-edificios <- t(sapply(pasos, function(p)
-  tapply(p$osebuildingid, periodo(p$datayear), function(x) length(unique(x)))))
-rownames(edificios) <- rownames(construccion)
-edificios
-
-# ---- 2.7 Distribución de la muestra ----
-
-y_dev <- analitica$siteeui_kbtu_sf[analitica$periodo == "Desarrollo"]
-summary(y_dev)
-
-par(mfrow = c(1, 2))
-p99 <- quantile(y_dev, 0.99)
-hist(y_dev[y_dev <= p99], breaks = 60,
-     main = "EUI, años de desarrollo", xlab = "EUI (kBtu/pie²)", ylab = "Frecuencia")
-hist(log(y_dev), breaks = 60,
-     main = "log(EUI), años de desarrollo", xlab = "log(kBtu/pie²)", ylab = "Frecuencia")
-par(mfrow = c(1, 1)) 
-
-round(quantile(y_dev, probs = c(0, 0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 1)), 1)
-round(mean(y_dev), 1)
-
-#Cobertura geografica
-sort(table(analitica$neighborhood[analitica$periodo == "Desarrollo"]), decreasing = TRUE)   # cobertura geográfica
-
-
-# ================================================================
-# 3. PARTICIONES TEMPORALES
-#    Validación cruzada temporal con ventanas de origen creciente.
-#    Para evaluar el año a se entrena solo con respuestas hasta a-2.
-# ================================================================
-
-ventanas <- list(
-  v2019 = list(entrena = 2017,      evalua = 2019),
-  v2020 = list(entrena = 2017:2018, evalua = 2020),
-  v2021 = list(entrena = 2017:2019, evalua = 2021)
-)
-
-# Partición final: se entrena con 2017-2021 y se evalúa UNA sola vez en 2023-2024
-final <- list(entrena = 2017:2021, evalua = c(2023, 2024))
-
-# ---- 3.2 Función para separar entrenamiento y evaluación ----
-separar <- function(v) {
-  list(
-    entrena = analitica[analitica$datayear %in% v$entrena, ],
-    evalua  = analitica[analitica$datayear %in% v$evalua, ]
-  )
-}
-
-# ---- 3.3 Verificaciones ----
-resumen_particiones <- do.call(rbind, lapply(c(ventanas, list(final = final)), function(v) {
-  p <- separar(v)
-  data.frame(
-    entrena_anios   = paste(range(v$entrena), collapse = "-"),
-    evalua_anios    = paste(v$evalua, collapse = ", "),
-    filas_entrena   = nrow(p$entrena),
-    filas_evalua    = nrow(p$evalua),
-    brecha_ok       = max(v$entrena) <= min(v$evalua) - 2   # se respeta a-2
-  )
-}))
-resumen_particiones
-
-
+cat(sprintf("Análisis e informe completos en %.1f minutos.\n", (proc.time()[["elapsed"]] - t_inicio) / 60))

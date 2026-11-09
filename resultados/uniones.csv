@@ -1,0 +1,7 @@
+"union","relacion","filas_antes","filas_despues","edificios_antes","edificios_despues","clave_derecha_unica","filas_con_registro_compartido"
+"Marca de error de registro a los registros 2015-2024","uno a uno por edificio y año",34699,34699,3823,3823,TRUE,0
+"EUI de a-2 a las filas objetivo","uno a uno por edificio y año",24654,24654,3813,3813,TRUE,0
+"EUI de a-3 a las filas objetivo","uno a uno por edificio y año",24654,24654,3813,3813,TRUE,0
+"Última EUI válida hasta a-2","muchos a uno: registro válido más reciente <= a-2 del edificio",24654,24654,3813,3813,TRUE,858
+"Uso del último registro hasta a-2","muchos a uno: registro más reciente <= a-2 del edificio",24654,24654,3813,3813,TRUE,0
+"Mediana por tipo del entrenamiento final a las filas de prueba (referencia)","muchos a uno por tipo",7001,7001,3638,3638,TRUE,7001

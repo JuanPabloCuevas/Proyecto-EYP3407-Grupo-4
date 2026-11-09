@@ -1,0 +1,23 @@
+"indicador","valor"
+"Filas 2015-2022",27300
+"Edificios 2015-2022",3692
+"Ciudades distintas (sin distinguir mayúsculas)",1
+"Barrios",13
+"Edificios por barrio, mínimo",83
+"Edificios por barrio, máximo",617
+"Códigos postales",29
+"Direcciones de más de un edificio",39
+"Edificios con dirección compartida",96
+"Nombres de más de un edificio",22
+"Edificios con nombre compartido",59
+"Pares dirección y nombre de más de un edificio",0
+"Superficie confirmada mínima (pie2)",16092
+"Filas con superficie confirmada distinta de edificios más estacionamiento",0
+"Filas con estacionamiento negativo",8
+"Edificios con estacionamiento negativo",1
+"Estacionamiento mínimo (pie2)",-3
+"Filas con superficie autodeclarada 0",578
+"Edificios con superficie autodeclarada 0",97
+"Edificios con superficie autodeclarada a más de 10 % de la confirmada",1034
+"Filas con superficie del uso principal mayor que 1,1 veces la de los edificios",2466
+"Filas sin superficie del uso principal",12

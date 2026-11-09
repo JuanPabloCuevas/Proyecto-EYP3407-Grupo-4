@@ -1,0 +1,11 @@
+# Archivos temporales de R, RStudio y de la compilación del informe
+.Rhistory
+.RData
+.Rproj.user/
+informe_files/
+informe.tex
+informe.log
+*.aux
+*.out
+*.toc
+.DS_Store

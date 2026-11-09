@@ -1,0 +1,788 @@
+---
+title: "Intensidad energética anual de edificios de Seattle: ¿cuánto se puede anticipar con información hasta dos años antes?"
+subtitle: "EYP3407 Tópicos Aplicados en Estadística · Proyecto aplicado, caso 04"
+author: "Juan Pablo Cuevas · Cristóbal Honorato · Michelle Houngbo · Maximiliano León"
+date: "10 de noviembre de 2026"
+lang: es
+documentclass: article
+classoption: titlepage
+papersize: letter
+fontsize: 11pt
+geometry: margin=2.2cm
+output:
+  pdf_document:
+    number_sections: true
+    fig_caption: true
+    latex_engine: pdflatex
+    extra_dependencies: ["booktabs", "float", "array"]
+  html_document:
+    number_sections: true
+header-includes:
+  - \DeclareUnicodeCharacter{2212}{\ensuremath{-}}
+  - \DeclareUnicodeCharacter{2264}{\ensuremath{\leq}}
+  - \DeclareUnicodeCharacter{2265}{\ensuremath{\geq}}
+  - \addto\captionsspanish{\def\tablename{Tabla}}
+  - \usepackage{caption}
+  - \captionsetup{font=small, labelfont=bf}
+  - \setlength{\emergencystretch}{3em}
+---
+
+```{r preparacion, include = FALSE}
+# Todas las cifras del texto, las tablas y las figuras se leen de resultados/, que
+# escribe analisis.R. Este archivo no ajusta modelos.
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.align = "center",
+                      fig.pos = "!htb")
+R <- "resultados"
+leer <- function(f) read.csv(file.path(R, f), check.names = FALSE, stringsAsFactors = FALSE)
+
+# Formato en castellano: coma decimal, espacio fino de miles desde 10 000 y signo menos.
+fmt1 <- function(x, d, signo = FALSE) {
+  if (is.na(x)) return("—")
+  if (abs(x) < 0.5 * 10^-d) x <- 0
+  s <- formatC(x, format = "f", digits = d, decimal.mark = ",",
+               big.mark = if (abs(x) >= 1e4) " " else "")
+  s <- sub("^-", "−", s)
+  if (signo && x > 0) s <- paste0("+", s)
+  s
+}
+num <- function(x, d = 1) vapply(x, fmt1, "", d = d)
+sig <- function(x, d = 2) vapply(x, fmt1, "", d = d, signo = TRUE)
+ent <- function(x) num(x, 0)
+pct <- function(x, d = 1) paste0(num(100 * x, d), " %")
+ic <- function(li, ls, d = 2) paste0("[", num(li, d), "; ", num(ls, d), "]")
+v <- function(d, col, ...) {
+  f <- list(...)
+  k <- rep(TRUE, nrow(d))
+  for (n in names(f)) k <- k & as.character(d[[n]]) == as.character(f[[n]])
+  stopifnot(sum(k) == 1)
+  d[[col]][k]
+}
+# Escapa los caracteres especiales de LaTeX fuera de las fórmulas ($...$) y convierte
+# `código` en \texttt{}.
+esc_latex <- function(x) {
+  vapply(x, function(s) {
+    if (is.na(s)) return("")
+    trozos <- strsplit(s, "$", fixed = TRUE)[[1]]
+    if (endsWith(s, "$")) trozos <- c(trozos, "")
+    texto <- seq_along(trozos) %% 2 == 1
+    trozos[texto] <- gsub("([%&#_])", "\\\\\\1", trozos[texto])
+    trozos[texto] <- gsub("`([^`]*)`", "\\\\texttt{\\1}", trozos[texto])
+    paste(trozos, collapse = "$")
+  }, "", USE.NAMES = FALSE)
+}
+tabla <- function(d, caption, align = NULL, letra = "small", posicion = "!htb", sep = NULL) {
+  if (knitr::is_latex_output()) {
+    d[] <- lapply(d, function(col) esc_latex(as.character(col)))
+    names(d) <- esc_latex(names(d))
+    k <- knitr::kable(d, format = "latex", booktabs = TRUE, caption = esc_latex(caption),
+                      align = align, escape = FALSE, position = posicion, linesep = "",
+                      row.names = FALSE)
+    ajuste <- paste0("\\centering\\", letra,
+                     if (!is.null(sep)) paste0("\\setlength{\\tabcolsep}{", sep, "}") else "")
+    k <- sub("\\centering", ajuste, k, fixed = TRUE)
+    return(k)
+  }
+  alin <- if (is.null(align)) NULL else
+    ifelse(grepl("^[lcr]$", align), align, ifelse(grepl("raggedleft", align, fixed = TRUE), "r", "l"))
+  knitr::kable(d, format = "pipe", caption = caption, align = alin, row.names = FALSE)
+}
+col_p <- function(ancho) paste0(">{\\raggedright\\arraybackslash}p{", ancho, "}")
+col_r <- function(ancho) paste0(">{\\raggedleft\\arraybackslash}p{", ancho, "}")
+lam_txt <- function(x) sub("^0$", "0", formatC(x, format = "fg", digits = 4, decimal.mark = ","))
+
+cas <- leer("cascada.csv"); casp <- leer("cascada_prueba.csv")
+pares <- leer("pares_historia.csv"); paresp <- leer("pares_historia_prueba.csv")
+names(pares)[1] <- names(paresp)[1] <- "anio"
+ab <- leer("altas_bajas.csv"); falt <- leer("faltantes_por_anio.csv")
+resp <- leer("resumen_respuesta.csv"); saltos <- leer("saltos_2015_2022.csv")
+extr <- leer("extremos_desarrollo.csv"); aud <- leer("auditoria_general.csv")
+audc <- leer("auditoria_columnas.csv")
+comp <- leer("comparacion_desarrollo.csv"); bus <- leer("busqueda_desarrollo.csv")
+difv <- leer("diferencia_por_ventana.csv"); incd <- leer("incertidumbre_desarrollo.csv")
+rlog <- leer("residuos_log.csv"); rent <- leer("residuos_log_entrenamiento.csv")
+rven <- leer("residuos_log_por_ventana.csv"); camb <- leer("pandemia_cambio_por_anio.csv")
+disp <- leer("dispersion_por_quintil.csv"); gk <- leer("gam_k_check.csv")
+gc <- leer("gam_concurvidad.csv"); lvar <- leer("lasso_variables.csv")
+tiem <- leer("tiempos_busqueda.csv")
+mp <- leer("metricas_prueba.csv"); incp <- leer("incertidumbre_prueba.csv")
+coefs <- leer("lasso_final_coeficientes.csv")
+dtipo <- leer("diag_prueba_tipo.csv"); dtam <- leer("diag_prueba_tamano.csv")
+dhist <- leer("diag_prueba_historia.csv"); dext <- leer("diag_prueba_extremos.csv")
+dsesgo <- leer("diag_prueba_extremos_sesgo.csv"); dconc <- leer("diag_prueba_concentracion.csv")
+dedif <- leer("diag_prueba_por_edificio.csv"); ptipo <- leer("pandemia_cambio_por_tipo.csv")
+pmae <- leer("pandemia_mae_por_anio.csv"); dmay <- leer("diag_prueba_mayores_errores.csv")
+s1 <- leer("s1_comparacion.csv"); s1b <- leer("s1_busqueda_original.csv")
+s2 <- leer("s2_edificios_excluidos.csv"); reg <- leer("control_sin_regla.csv")
+tej <- if (file.exists(file.path(R, "tiempo_ejecucion.csv"))) leer("tiempo_ejecucion.csv") else NULL
+dusos <- leer("diag_prueba_uso.csv"); aud2 <- leer("auditoria_complementaria.csv")
+un <- leer("uniones.csv"); catf <- leer("categorias_entrenamiento_final.csv")
+
+# Cifras que el texto usa varias veces
+paso <- function(d, p, col) v(d, col, paso = p)
+n_dev <- paso(cas, "Sin errores de registro", "filas")
+e_dev <- paso(cas, "Sin errores de registro", "edificios")
+n_val <- sum(pares[pares$anio %in% 2019:2021, -1])
+n_pru <- paso(casp, "Sin errores de registro", "filas")
+e_pru <- paso(casp, "Sin errores de registro", "edificios")
+val <- colSums(pares[pares$anio %in% 2019:2021, -1])
+pru <- colSums(paresp[, -1])
+mae_d <- function(m) v(comp, "MAE", modelo = m)
+mae_p <- function(m, a = "reunidos") v(mp, "MAE", modelo = m, anio = a)
+rmse_p <- function(m, a = "reunidos") v(mp, "RMSE", modelo = m, anio = a)
+inc <- function(m, col, frente = "referencia", a = "reunidos") {
+  v(incp, col, modelo = m, frente_a = frente, anio = a)
+}
+ic_p <- function(m, frente = "referencia", a = "reunidos") {
+  ic(inc(m, "li_95", frente, a), inc(m, "ls_95", frente, a))
+}
+dif_p <- function(m, frente = "referencia", a = "reunidos") inc(m, "dif_MAE", frente, a)
+dif_v <- function(m, a) v(difv, "dif_MAE_vs_ref", modelo = m, ventana = a)
+lambda <- function(cfg) as.numeric(sub("lambda=", "", cfg))
+lam_el <- lambda(v(comp, "config", modelo = "lasso"))
+lam_bus <- bus[bus$modelo == "lasso", ]
+pos_lam <- v(lam_bus, "complejidad", config = v(comp, "config", modelo = "lasso"))
+coef_lasso <- regmatches(v(comp, "complejidad", modelo = "lasso"),
+                         gregexpr("[0-9]+", v(comp, "complejidad", modelo = "lasso")))[[1]]
+edf_gam <- as.numeric(sub(" grados.*", "", v(comp, "complejidad", modelo = "gam")))
+h <- function(g, col) v(dhist, col, historia = g)
+aporte <- function(g) (h(g, "lasso") - h(g, "referencia")) * h(g, "n") / n_pru
+ext_g <- dext$consumo_previo[dext$consumo_previo != "Resto"]
+umbral_p99 <- as.numeric(sub(".*>= ([0-9.]+).*", "\\1", ext_g))
+b_hist <- v(coefs, "coeficiente", variable = "log_hist")
+b_a3 <- v(coefs, "coeficiente", variable = "log_a3")
+ric <- camb$q3 - camb$q1
+names(ric) <- camb$anio
+cambio_tipo <- function(t, a) v(ptipo, as.character(a), buildingtype = t)
+mr_cambio <- c(cambio_tipo("Multifamily MR (5-9)", 2020), cambio_tipo("Multifamily MR (5-9)", 2021))
+s1v <- function(esc, m, col) v(s1, col, escala = esc, modelo = m)
+s2v <- function(m, g, col = "cambio") v(s2, col, modelo = m, grupo = g)
+regv <- function(m, ver, col = "MAE") v(reg, col, modelo = m, version = ver)
+n_err_hist <- sum(saltos$error_registro)
+salto_max <- saltos[which.max(saltos$veces), ]
+salto_no <- saltos[!saltos$error_registro, ][1, ]
+conc <- function(m, col) v(dconc, col, modelo = m)
+ed <- function(m, col) v(dedif, col, modelo = m)
+cantidad_constantes <- sum(audc$edificios_con_cambios == 0)
+mae_anio <- function(m, a) v(pmae, m, anio = a)
+a2 <- function(indicador) v(aud2, "valor", indicador = indicador)
+cat_f <- function(variable, col) v(catf, col, variable = variable)
+cfg <- function(m) gsub("=", " ", v(comp, "config", modelo = m))
+uso <- function(g, col = "lasso_menos_ultima") v(dusos, col, uso_grupo = g)
+y_lista <- function(x) if (length(x) < 2) x else paste(paste(x[-length(x)], collapse = ", "), "y", x[length(x)])
+# Regla de un error estándar del plan inicial (sección 6.4): error estándar = desviación
+# estándar de los tres MAE por ventana de la mejor configuración dividida por raíz de 3.
+mejor_lam <- lam_bus[which.min(lam_bus$MAE), ]
+ee_lam <- sd(unlist(mejor_lam[c("MAE_2019", "MAE_2020", "MAE_2021")])) / sqrt(3)
+pos_1ee <- min(lam_bus$complejidad[lam_bus$MAE <= mejor_lam$MAE + ee_lam])
+# S2: MAE reunido de la corrida sin los edificios excluidos (promedio de los dos grupos
+# ponderado por sus filas, que es el MAE sobre todas las filas de validación).
+s2_reunido <- function(m, col = "MAE_sin_excluidos") {
+  x <- s2[s2$modelo == m, ]
+  sum(x$n * x[[col]]) / sum(x$n)
+}
+```
+
+```{r comprobaciones, include = FALSE}
+# Cada afirmación cualitativa del texto se comprueba aquí. Si un resultado cambiara,
+# el informe no se genera en vez de quedar en contradicción con sus tablas.
+afirmar <- function(condicion, texto) if (!isTRUE(condicion)) stop("Afirmación del informe sin respaldo: ", texto)
+mods <- c("lasso", "gam", "bosque")
+afirmar(comp$modelo[comp$modelo != "referencia"][which.min(comp$MAE[comp$modelo != "referencia"])] == "lasso",
+        "el procedimiento elegido es el lasso")
+afirmar(all(comp$dif_MAE_vs_ref[comp$modelo != "referencia"] > 0), "en desarrollo ningún modelo supera a la referencia")
+afirmar(all(sapply(mods, dif_v, a = 2019) > 0) && dif_v("lasso", 2020) < 0 && dif_v("lasso", 2021) < 0,
+        "los modelos pierden en 2019 y el lasso gana en 2020 y 2021")
+afirmar(v(incd, "li_95", modelo = "lasso") < 0 && v(incd, "ls_95", modelo = "lasso") > 0,
+        "el intervalo de desarrollo del lasso incluye 0")
+afirmar(all(sapply(mods, function(m) inc(m, "ls_95") < 0)), "en prueba los tres modelos superan a la referencia")
+afirmar(inc("lasso", "li_95", "referencia", "2023") < 0 && inc("lasso", "ls_95", "referencia", "2023") > 0,
+        "en 2023 el intervalo del lasso frente a la referencia incluye 0")
+afirmar(inc("lasso", "ls_95", "referencia", "2024") < 0, "en 2024 el intervalo excluye 0")
+afirmar(inc("lasso", "li_95", "referencia_ultima") < 0 && inc("lasso", "ls_95", "referencia_ultima") > 0,
+        "frente a la referencia alternativa el intervalo incluye 0")
+afirmar(dif_p("lasso", "referencia_ultima", "2023") > 0 && dif_p("lasso", "referencia_ultima", "2024") < 0,
+        "frente a la referencia alternativa el signo cambia entre años")
+afirmar(mp$modelo[mp$anio == "reunidos"][which.min(mp$MAE[mp$anio == "reunidos"])] == "bosque",
+        "el bosque tiene el menor MAE en prueba")
+afirmar(aporte("Solo historia anterior") / dif_p("lasso") > 0.5, "la mayor parte de la ventaja viene de filas sin EUI en a-2")
+afirmar(h("EUI en a-2", "lasso") < h("EUI en a-2", "referencia"), "con EUI en a-2 el lasso es algo mejor")
+afirmar(v(dext, "lasso", consumo_previo = ext_g) > v(dext, "referencia_ultima", consumo_previo = ext_g) &&
+          v(dsesgo, "mediana_pred_menos_y", consumo_previo = ext_g, modelo = "lasso") < 0,
+        "en consumos extremos el lasso es peor y subestima")
+afirmar(v(dext, "lasso", consumo_previo = "Resto") < v(dext, "referencia_ultima", consumo_previo = "Resto"),
+        "en el resto el lasso es mejor que la referencia alternativa")
+afirmar(setequal(dtipo$buildingtype[dtipo$lasso_menos_ultima > 0], c("Hospital", "NonResidential", "University")),
+        "el lasso es peor que la referencia alternativa en hospitales, no residenciales y universidades")
+afirmar(all(dtam$lasso_menos_ultima[1:3] < 0) && all(dtam$lasso_menos_ultima[4:5] > 0),
+        "por tamaño, mejor en Q1-Q3 y peor en Q4-Q5")
+afirmar(conc("lasso", "parte_cuadrados_top1") > 0.5, "el 1 % mayor concentra más de la mitad del error cuadrático")
+afirmar(ed("lasso", "MAE_por_edificio") < ed("referencia_ultima", "MAE_por_edificio") &&
+          ed("referencia_ultima", "MAE_por_edificio") < ed("referencia", "MAE_por_edificio"),
+        "orden del MAE por edificio")
+afirmar(all(names(sort(ric, decreasing = TRUE))[1:2] %in% c("2020", "2021")), "2020 y 2021 tienen el mayor RIC")
+afirmar(all(sapply(c("referencia", "referencia_ultima", mods), function(m) {
+  x <- pmae[[m]]; pmae$anio[which.max(x)] == 2021 })), "2021 es el año de mayor error para todos")
+afirmar(all(abs(rent$mediana_entren) < 0.02) && all(rven$mediana[rven$modelo == "lasso"] < 0),
+        "residuo con mediana cercana a 0 en entrenamiento y negativa fuera de muestra")
+afirmar(gk[["p-value"]] > 0.05, "la prueba de k no indica falta de base")
+afirmar(all(tapply(seq_len(nrow(lvar)), lvar$ventana, function(i) {
+  lvar$variable[i][which.max(abs(lvar$coeficiente[i]))] == "log_hist" })), "la historia tiene el mayor coeficiente")
+afirmar(all(sapply(mods, function(m) s1v("original", m, "MAE") > s1v("log", m, "MAE") &&
+                     s1v("original", m, "dif_MAE_vs_ref") > 0)), "S1: la escala original empeora el MAE")
+afirmar(s1v("original", "lasso", "RMSE") < s1v("log", "lasso", "RMSE") &&
+          s1v("original", "gam", "RMSE") < s1v("log", "gam", "RMSE"), "S1: el RMSE del lasso y del GAM baja")
+afirmar(s2v("bosque", "Excluidos del ajuste") > s2v("gam", "Excluidos del ajuste") &&
+          s2v("gam", "Excluidos del ajuste") > s2v("lasso", "Excluidos del ajuste") &&
+          s2v("lasso", "Excluidos del ajuste") > 0 &&
+          all(sapply(mods, function(m) s2v(m, "Incluidos") < 0.1)), "S2: orden de los cambios")
+afirmar(all(sapply(c("referencia", mods), function(m) regv(m, "Sin regla, filas válidas") >= regv(m, "Con regla"))),
+        "sin la regla ningún procedimiento mejora")
+afirmar(min(resp[["0%"]][resp$escala != "log(EUI)"]) > 0, "la EUI mínima es positiva")
+afirmar(b_hist + b_a3 < 1, "la suma de los coeficientes de historia es menor que 1")
+afirmar(rmse_p("lasso") < rmse_p("referencia") && rmse_p("lasso") > rmse_p("referencia_ultima"),
+        "el RMSE del lasso está entre el de las dos referencias")
+afirmar(all(un$filas_antes == un$filas_despues) && all(un$edificios_antes == un$edificios_despues) &&
+          all(un$clave_derecha_unica), "cada unión conserva filas y edificios")
+afirmar(all(un$filas_con_registro_compartido[grepl("^uno a uno", un$relacion)] == 0) &&
+          v(un, "filas_con_registro_compartido", union = "Última EUI válida hasta a-2") > 0,
+        "las uniones de uno a uno no repiten registros y la de la última EUI sí")
+afirmar(a2("Ciudades distintas (sin distinguir mayúsculas)") == 1 &&
+          a2("Pares dirección y nombre de más de un edificio") == 0, "una sola ciudad y ningún par dirección y nombre repetido")
+afirmar(a2("Filas con superficie confirmada distinta de edificios más estacionamiento") == 0 &&
+          a2("Superficie confirmada mínima (pie2)") > 0, "superficie confirmada positiva y coherente")
+afirmar(cat_f("buildingtype", "categorias_a_otro") == 0 && cat_f("neighborhood", "categorias_a_otro") == 0 &&
+          cat_f("buildingtype", "filas_sin_dato") == 0 && cat_f("neighborhood", "filas_sin_dato") == 0,
+        "tipo y barrio no tienen categorías raras ni faltantes")
+afirmar(audc$edificios_con_cambios[audc$columna == "buildingname"] == 0, "el nombre no cambia dentro de un edificio")
+afirmar(mean(disp$mediana_abs_residuo_log[disp$modelo == "lasso"]) < 0.2 &&
+          max(disp$pred_mediana[disp$modelo == "lasso"]) / min(disp$pred_mediana[disp$modelo == "lasso"]) > 3,
+        "error en log estable mientras el nivel predicho se triplica")
+afirmar(names(which.min(sapply(mods, s1v, esc = "original", col = "MAE"))) == "lasso",
+        "S1: en escala original el lasso sigue siendo el de menor MAE")
+afirmar(all(abs(sapply(c("referencia", mods), s2_reunido, col = "MAE_con_todos") -
+                  sapply(c("referencia", mods), mae_d)) < 1e-9), "S2: los grupos reconstruyen el MAE de desarrollo")
+afirmar(names(which.min(sapply(mods, s2_reunido))) == "lasso" &&
+          all(sapply(mods, s2_reunido) > s2_reunido("referencia")),
+        "S2: el lasso sigue siendo el mejor modelo y ninguno supera a la referencia")
+afirmar(all(sapply(c("Multifamily Housing", "Non-Refrigerated Warehouse", "K-12 School", "Worship Facility"), uso) < 0) &&
+          abs(uso("Office")) < 0.5 && all(sapply(c("Hotel", "Retail Store", "Otros usos"), uso) > 0),
+        "por uso, el lasso es mejor en multifamiliar, bodegas, escuelas y culto, empata en oficinas y es peor en hoteles, comercio y otros usos")
+afirmar(pos_1ee < pos_lam, "la regla 1-EE elegía un lasso más penalizado")
+```
+
+# Resumen ejecutivo
+
+**Problema.** El programa de reporte energético de Seattle recibe cada año la intensidad energética (EUI, kBtu/pie²) de más de 3000 edificios no residenciales y multifamiliares, pero en enero del año $a$ todavía no está completo el reporte de $a-1$. Evaluamos qué tan bien se anticipa la EUI anual de un edificio conocido con información hasta $a-2$, para fijar al inicio del año un valor esperado por edificio.
+
+**Resultado principal.** El procedimiento elegido en desarrollo (2019–2021) fue un lasso sobre log(EUI). En la prueba 2023–2024 (`r ent(n_pru)` edificio–año de `r ent(e_pru)` edificios) su MAE fue `r num(mae_p("lasso"), 2)` kBtu/pie², `r num(-dif_p("lasso"), 2)` menos que repetir la EUI de $a-2$ (intervalo 95 % por remuestreo de edificios: `r ic_p("lasso")`). La ventaja se concentra en `r ent(pru[["Solo historia anterior"]])` filas sin EUI en $a-2$, donde la referencia usa la mediana del tipo: ellas explican `r num(-aporte("Solo historia anterior"), 2)` de los `r num(-dif_p("lasso"), 2)`. Frente a la última EUI disponible, la diferencia fue `r num(dif_p("lasso", "referencia_ultima"), 2)` `r ic_p("lasso", "referencia_ultima")`. En desarrollo ningún modelo superó a la referencia.
+
+**Recomendación.** Anticipar la EUI con la historia del propio edificio: la última EUI reportada hasta $a-2$ rinde casi como el lasso, que aporta sobre todo cuando no hay historia. No usar el lasso en edificios con consumo previo extremo (≥ `r ent(umbral_p99)` kBtu/pie²), donde subestima.
+
+**Limitación principal.** Es una evaluación retrospectiva con dos años de prueba. Los choques comunes de un año, como la pandemia en 2020–2021, cambian el signo de las diferencias, y el intervalo no incorpora esa variación.
+
+# Problema y datos
+
+## Pregunta, usuario y decisión
+
+La pregunta del caso es qué tan bien se anticipa la intensidad energética anual de edificios conocidos con sus atributos y su historial reportado. La dirigimos a quien administra el programa de reporte o planifica programas de eficiencia: al comenzar el año $a$ necesita un valor esperado de EUI por edificio, por ejemplo para priorizar seguimiento o asistencia técnica, sin esperar el reporte de $a-1$, incompleto en enero (ficha del caso; EYP3407, 2026). Se trata de predecir un resultado futuro, no de describir reportes ya registrados; como no hay versiones históricas de la base, la evaluación es retrospectiva bajo un supuesto de información (sección 3.2) y no mide el rendimiento operativo real.
+
+## Población, unidad y respuesta
+
+Una fila es un edificio–año objetivo, con clave `osebuildingid` y `datayear` (el código comprueba que no se repite). La respuesta es `siteeui_kbtu_sf`, la energía consumida en el sitio durante el año calendario dividida por la superficie bruta, en kBtu/pie². La predicción se emite al comenzar el año $a$ y solo usa registros de años $\leq a-2$. La población son los edificios del programa con un reporte válido de EUI en el año objetivo (2017–2021 en desarrollo, 2023–2024 en prueba). Un edificio entra en cada año en que tiene respuesta, tenga o no historia, sin exigir que reporte en años futuros; las filas sin respuesta se excluyen y no se imputan. Las conclusiones valen para esta población, no para edificios fuera del programa ni para los años en que un edificio no reportó.
+
+En desarrollo la EUI tiene mediana `r num(resp[["50%"]][1], 1)` kBtu/pie², percentil 99 de `r ent(resp[["99%"]][1])` y máximo `r ent(resp[["100%"]][1])`: es muy asimétrica. Su mínimo es `r num(resp[["0%"]][1], 1)`, sin ceros ni negativos, de modo que el logaritmo está definido y reduce la asimetría (Anexo A.3).
+
+## Procedencia y fechas
+
+Los datos provienen del programa *Seattle Building Energy Benchmarking*: la Office of Sustainability and Environment de Seattle los publica en el portal de datos abiertos de la ciudad como *Building Energy Benchmarking Data, 2015-Present* (conjunto `teqw-tu6e`; City of Seattle, 2026). Según los metadatos del conjunto, consultados el 9 de noviembre de 2026, son de dominio público, así que la copia puede publicarse en el repositorio citando a esa oficina. Usamos la copia del curso, `caso04_seattle_edificios.zip`, preparada el 12 de octubre de 2026: `datos.csv` con `r ent(paso(cas, "Registros 2015-2024", "filas"))` registros edificio–año de `r ent(paso(cas, "Registros 2015-2024", "edificios"))` edificios y `r nrow(audc) + 2` columnas, `diccionario.csv` con las descripciones de la fuente y `LEEME.txt`. Los originales no se editan: todo filtro y transformación está en el código. Distinguimos tres fechas: la del fenómeno (el año calendario del consumo, `datayear`), la del registro (el reporte se entrega después de terminado el año y puede corregirse más tarde) y la de descarga (octubre de 2026). Como solo tenemos la versión descargada, un valor de 2019 puede incluir correcciones posteriores, y los atributos físicos repiten en todos los años el valor actual (sección 2.5).
+
+## Construcción de la muestra
+
+```{r tabla-muestra}
+d <- data.frame(
+  Paso = c("Filas objetivo del período", "Con respuesta (EUI del año)", "Sin errores de registro",
+           "Filas evaluadas"),
+  `Desarrollo: filas` = ent(c(cas$filas[2:4], n_val)),
+  `Desarrollo: edificios` = ent(c(cas$edificios[2:4], v(incd, "edificios", modelo = "lasso"))),
+  `Prueba: filas` = ent(c(casp$filas, n_pru)),
+  `Prueba: edificios` = ent(c(casp$edificios, e_pru)),
+  check.names = FALSE)
+tabla(d, "Construcción de la muestra. Desarrollo: objetivos 2017–2021, de los que se evalúan 2019–2021 (2017 y 2018 solo entrenan). Prueba: objetivos 2023–2024.",
+      align = c("l", "r", "r", "r", "r"))
+```
+
+La Tabla 1 y la Figura 1 muestran la construcción. Los registros de 2017–2021 son objetivos de desarrollo y los de 2023–2024, objetivos de prueba; 2015, 2016 y 2022 solo aportan historia. Salen las filas sin EUI del año (`r ent(cas$filas[2] - cas$filas[3])` en desarrollo y `r ent(casp$filas[1] - casp$filas[2])` en prueba) y las marcadas como error de registro (`r cas$filas[3] - cas$filas[4]` y `r casp$filas[2] - casp$filas[3]`; sección 2.5). Cada año entran y salen edificios: entre 2016 y 2022 hubo entre `r min(ab$altas)` y `r max(ab$altas)` altas y entre `r min(ab$bajas)` y `r max(ab$bajas)` bajas por año (Anexo A.3). Por eso no todas las filas tienen EUI en $a-2$. En prueba, `r ent(pru[["Solo historia anterior"]])` filas (`r pct(pru[["Solo historia anterior"]] / n_pru)`) solo tienen historia más antigua, frente a `r val[["Solo historia anterior"]]` (`r pct(val[["Solo historia anterior"]] / n_val)`) en desarrollo, porque en 2021 y 2022 faltan `r v(falt, "sin_respuesta", anio = 2021)` y `r v(falt, "sin_respuesta", anio = 2022)` respuestas, contra `r min(falt$sin_respuesta[falt$anio <= 2020])` a `r max(falt$sin_respuesta[falt$anio <= 2020])` por año en 2015–2020. Este cambio es clave para leer los resultados de prueba.
+
+La base es una sola tabla, con varias filas por edificio. A las `r ent(un$filas_antes[2])` filas objetivo de 2017–2021 y 2023–2024 (`r ent(un$edificios_antes[2])` edificios) se unen la EUI de $a-2$ y la de $a-3$ por la clave edificio–año, de uno a uno, y la última EUI válida y el uso por el registro más reciente $\leq a-2$ del mismo edificio, de muchos a uno: si el edificio no volvió a reportar una EUI válida, su último registro sirve a varios años objetivo (`r ent(v(un, "filas_con_registro_compartido", union = "Última EUI válida hasta a-2"))` filas comparten así su última EUI). Cada unión conserva filas y edificios (`resultados/uniones.csv`). Los `r ent(a2("Edificios 2015-2022"))` edificios de 2015–2022 están en Seattle, en `r a2("Barrios")` barrios (de `r a2("Edificios por barrio, mínimo")` a `r a2("Edificios por barrio, máximo")` edificios cada uno) y `r a2("Códigos postales")` códigos postales.
+
+```{r fig-muestra, fig.cap = paste0("Construcción de la muestra. Filas edificio–año y edificios en cada paso, para desarrollo (izquierda) y prueba (derecha). Las filas sin EUI del año salen sin imputar, y las marcadas por la regla de errores de registro no se usan como objetivo ni como historia. En azul, los objetivos válidos; en naranja, las filas evaluadas, que las cajas inferiores separan según la historia disponible al predecir. Las filas que solo tienen historia anterior a $a-2$ pasan de ", val[["Solo historia anterior"]], " en desarrollo a ", pru[["Solo historia anterior"]], " en prueba, un cambio que explica buena parte de los resultados de la sección 5.2."), out.width = "100%"}
+knitr::include_graphics(file.path(R, "fig1_construccion_muestra.png"))
+```
+
+## Calidad de los datos
+
+**Atributos copiados e identificadores.** De las `r nrow(audc)` columnas que no son clave, `r cantidad_constantes` no cambian dentro de ningún edificio en 2015–2022, entre ellas nombre, dirección, parcela, tipo, año de construcción, pisos, número de edificios, las seis superficies del edificio (confirmadas y autodeclaradas), barrio, distrito, coordenadas y la marca de demolición: la base repite el valor actual en todos los años, de modo que los cambios de nombre no se pueden auditar. Los usamos bajo el supuesto declarado de características estables: si un edificio se amplió, su superficie actual se aplica también a años anteriores. Hay `r a2("Direcciones de más de un edificio")` direcciones y `r a2("Nombres de más de un edificio")` nombres repetidos entre edificios distintos, pero ningún par de dirección y nombre, así que no encontramos un edificio con dos identificadores. Las columnas de uso sí cambian (el uso principal, en `r v(audc, "edificios_con_cambios", columna = "largestpropertyusetype")` edificios), por lo que se toman del último registro $\leq a-2$ (Anexo A.4).
+
+**Códigos especiales, faltantes y categorías.** Hay `r v(aud, "valor", indicador = "Filas con 0 pisos")` filas con 0 pisos y `r v(aud, "valor", indicador = "Filas con 0 edificios")` con 0 edificios; los tratamos como dato ausente. En `r ent(v(aud, "valor", indicador = "Filas con segundo uso sin su superficie"))` filas hay un segundo uso sin su superficie. En el entrenamiento final, `r cat_f("uso_prev", "categorias_a_otro")` de las `r cat_f("uso_prev", "categorias")` categorías del uso principal tienen menos de 30 filas y pasan a «Otro» (`r cat_f("uso_prev", "filas_a_otro")` filas, `r pct(cat_f("uso_prev", "filas_a_otro") / cat_f("uso_prev", "filas"))`), y `r cat_f("uso_prev", "filas_sin_dato")` filas sin registro previo de uso van a «Sin dato» (sección 4.1); el tipo y el barrio no tienen categorías raras. Hay `r v(aud, "valor", indicador = "Parcelas con más de un edificio")` parcelas con más de un edificio, pero no se une información por parcela: la unidad es el edificio del programa.
+
+**Superficies.** La superficie confirmada por la ciudad, que usamos como predictor, es positiva (mínimo `r ent(a2("Superficie confirmada mínima (pie2)"))` pie²) y siempre igual a la de los edificios más el estacionamiento. La autodeclarada en Portfolio Manager difiere en más de 10 % de la confirmada en `r ent(a2("Edificios con superficie autodeclarada a más de 10 % de la confirmada"))` de los `r ent(a2("Edificios 2015-2022"))` edificios (`r a2("Edificios con superficie autodeclarada 0")` la declaran 0), y en `r ent(a2("Filas con superficie del uso principal mayor que 1,1 veces la de los edificios"))` filas la superficie del uso principal supera en más de 10 % la de los edificios. Usamos la confirmada y no las autodeclaradas, y la fracción del uso principal se calcula sobre la suma de las superficies de uso, de modo que queda entre 0 y 1. Un edificio tiene un estacionamiento confirmado negativo (`r num(a2("Estacionamiento mínimo (pie2)"), 0)` pie² en `r a2("Filas con estacionamiento negativo")` filas), un valor imposible, pero despreciable frente a su superficie.
+
+**Errores de registro frente a extremos válidos.** Antes de ajustar modelos fijamos una regla que solo mira años anteriores: un registro es error si su EUI supera 10 veces la mediana de las EUI previas del mismo edificio y además supera 1000 kBtu/pie², valores incompatibles con la historia del edificio, como los de un error de unidades. Marca `r n_err_hist` registros en 2015–2022 (Anexo A.5; por ejemplo, `r ent(salto_max$eui)` con una mediana previa de `r num(salto_max$mediana_previa, 1)`) y `r casp$filas[2] - casp$filas[3]` en 2023–2024; no se usan como objetivo ni como historia. No se marcan los saltos a niveles posibles (de `r num(salto_no$mediana_previa, 1)` a `r num(salto_no$eui, 1)` puede ser una recuperación) ni las caídas, porque un edificio puede vaciarse. Los consumos altos con historia coherente se conservan: el mayor valor de desarrollo, `r ent(extr$eui[1])` kBtu/pie², es de un centro de datos que reportaba `r ent(extr$eui_a2[1])` dos años antes.
+
+## Variables admisibles y excluidas
+
+La Tabla 2 resume la auditoría de las columnas. Las medidas de consumo, emisiones y ENERGY STAR del año objetivo contienen o reflejan la respuesta y se excluyen; no reconstruimos la EUI con sus componentes. El cumplimiento y la marca de demolición se determinan después del año objetivo, y el distrito usa límites de 2023.
+
+```{r tabla-variables}
+columnas <- c("`osebuildingid`, `datayear`",
+              "`buildingname`, `address`, `taxparcel...`, `city`, `state`, `zipcode`, `latitude`, `longitude`",
+              "`neighborhood`", "`councildistrictcode`",
+              "`buildingtype`, `yearbuilt`, `numberoffloors`, `numberofbuildings`",
+              "`propertygfatotal`, `propertygfaparking`",
+              "`propertygfabuildings` y tres autodeclaradas (`selfreport...`)",
+              "Usos 1.º a 3.º y sus superficies (`largestpropertyusetype`, ...)",
+              "`epapropertytype`", "`siteeui_kbtu_sf`",
+              "13 medidas del año (`siteenergyuse_kbtu`, `electricity_kwh`, ...)",
+              "`compliancestatus`, `complianceissue`, `demolished`")
+interpretacion <- c("edificio (texto) y año del reporte (num.)",
+                    "nombre, ubicación exacta y parcela (texto y num.)",
+                    paste0("barrio (cat., ", a2("Barrios"), " niveles)"),
+                    "distrito del concejo municipal (cat.)",
+                    "tipo de edificio (cat.); año de construcción, pisos y edificios de la propiedad (num.)",
+                    "superficie bruta total y de estacionamiento, confirmadas por la ciudad (num., pie²)",
+                    "superficie sin estacionamiento y superficies autodeclaradas (num., pie²)",
+                    "tres usos de mayor superficie (cat.) y la superficie de cada uno (num., pie²)",
+                    "tipo de propiedad de la EPA (cat.)",
+                    "energía del sitio por pie² de superficie bruta (num., kBtu/pie²)",
+                    "consumo, emisiones y ENERGY STAR del mismo año (num.)",
+                    "cumplimiento del reporte (texto) y demolición (lógica)")
+d <- data.frame(check.names = FALSE,
+  `Columnas: interpretación (tipo)` = paste0(columnas, ": ", interpretacion),
+  Clase = c("Identificador", "Identificador", "Entrada", "Posterior", "Entrada", "Entrada", "Entrada",
+            "Entrada", "Entrada", "Respuesta", "Derivada de la respuesta", "Posterior"),
+  `Disponible al predecir $a$` = c("—", "Valor actual en todos los años", "Valor actual",
+            "Límites de noviembre de 2023", "Valor actual", "Valor actual", "Valor actual",
+            "Último registro $\\leq a-2$", "Último registro $\\leq a-2$",
+            "Año $a$: se predice; $\\leq a-2$: historia", "Año $a$: no disponibles",
+            "Al cierre del reporte; demolición, ciclo 2023"),
+  `Decisión` = c("Clave edificio–año; no son predictores.",
+                 "Excluidas: identifican al edificio; la ubicación entra como barrio.",
+                 "Incluida.",
+                 "Excluida: límites posteriores a casi todos los años objetivo.",
+                 "Incluidas: tipo, antigüedad ($a$ menos el año de construcción), log de pisos y log de edificios.",
+                 "Incluidas: log de la superficie y fracción de estacionamiento.",
+                 "Excluidas: total menos estacionamiento, y autodeclaradas menos coherentes (sección 2.5).",
+                 "Incluidas: uso principal, fracción de superficie del uso principal y número de usos.",
+                 "No usada: otra clasificación del mismo uso principal.",
+                 "Se predice; su historia entra como log de la última EUI válida y de la EUI de $a-3$, con indicadoras.",
+                 "Excluidas por fuga; sus valores $\\leq a-2$ repetirían la historia de la EUI.",
+                 "Excluidas."))
+tabla(d, "Variables admisibles y excluidas. Tipo: cat., categórica; num., numérica. Clase: identificador, dato de entrada, atributo o resultado posterior al año objetivo, respuesta o variable derivada de ella. «Valor actual»: la base repite en todos los años el valor vigente del edificio (columnas sin cambios, Anexo A.4).",
+      align = c(col_p("6.6cm"), col_p("1.8cm"), col_p("2.3cm"), col_p("5.0cm")),
+      letra = "footnotesize", sep = "4pt")
+```
+
+# Diseño de evaluación
+
+## Particiones temporales
+
+Usamos ventanas temporales que crecen (Figura 2; Hyndman y Athanasopoulos, 2021), porque el uso es predecir años futuros de edificios conocidos. Para validar el año $a$ se entrena solo con objetivos hasta $a-2$, de modo que las etiquetas también respetan el retraso del reporte: la ventana 1 entrena con 2017 y valida 2019; la 2, con 2017–2018 y valida 2020; la 3, con 2017–2019 y valida 2021. Un edificio aparece en entrenamiento y en validación, como ocurrirá al usar el modelo; los edificios nuevos se estudian en la sensibilidad S2. Tras elegir, el procedimiento se reajusta con los objetivos 2017–2021 y se evalúa una sola vez en 2023 (historia hasta 2021) y en 2024 (historia hasta 2022).
+
+```{r fig-diseno, fig.cap = "Diseño temporal. Cada fila es un ajuste. Los objetivos de entrenamiento (E) y el año evaluado (V en validación, P en prueba) usan predictores de años $\\leq a-2$; el año $a-1$ nunca se usa. Los años H solo aportan historia. Las ventanas de desarrollo crecen y el ajuste final, con objetivos 2017–2021, se evalúa una sola vez en 2023 y 2024; 2022 solo sirve como historia para 2024.", out.width = "100%"}
+knitr::include_graphics(file.path(R, "fig2_diseno_temporal.png"))
+```
+
+## Información disponible
+
+Cada predictor se construye con registros de años $\leq a-2$, en las filas evaluadas y en las de entrenamiento, y el código se detiene si alguna variable de historia viene de $a-1$ o de un año posterior. En una corrida aparte (`verificacion/fuga.R`) alteramos al azar la EUI y los usos de los años posteriores a cada corte: las predicciones de las 35 configuraciones, de la referencia y de la prueba quedaron idénticas, y las que sí usaban años alterados cambiaron. Suponemos que en enero del año $a$ están disponibles los reportes hasta $a-2$ tal como aparecen en la copia descargada, y que los atributos copiados describen al edificio en ese momento; si los reportes se corrigieron después, la evaluación es optimista.
+
+## Métricas, referencia y regla de selección
+
+La métrica principal es el MAE en kBtu/pie², sobre las filas reunidas de las tres ventanas, de modo que cada edificio–año pesa lo mismo; el RMSE, complementario, es sensible a pocos errores grandes. Como el panel repite edificios, en prueba informamos también el MAE por edificio y el error absoluto dividido por la mediana de su tipo en el entrenamiento. Todos los procedimientos se comparan en las mismas filas, con exclusiones comunes. La referencia de la ficha predice la EUI de $a-2$ y, si no existe, la mediana de la EUI del tipo en el entrenamiento. Como la ficha no dice qué hacer cuando falta $a-2$ pero hay años anteriores, antes de abrir la prueba fijamos además una referencia alternativa con la última EUI válida hasta $a-2$, que solo se informa. La regla elige, dentro de cada familia y entre familias, el menor MAE reunido; un empate exacto iría a lo más simple.
+
+## Congelamiento e incertidumbre
+
+Antes de evaluar la prueba registramos en `CONGELADO.md`, con fecha y huella md5 del código, la población, la regla de calidad, las variables, los modelos, la búsqueda, la métrica, la regla de selección y el procedimiento elegido. Para la incertidumbre remuestreamos edificios con reposición (Davison y Hinkley, 1997), con `r ent(2000)` réplicas y semilla 3407: cada edificio aporta todas sus filas a la vez, lo que respeta la dependencia entre sus años. Con predicciones fijas, el intervalo de percentiles 95 % de la diferencia de MAE es condicional a los ajustes: no incluye la incertidumbre de selección y entrenamiento ni la de choques comunes a un año, que examinamos comparando años (sección 5.3). La dispersión entre ventanas, que comparten datos, no se interpreta como un intervalo de confianza.
+
+# Métodos
+
+## Preprocesamiento común
+
+Todo lo que se aprende se calcula con el entrenamiento de cada ventana y se aplica sin recalcular a la validación o a la prueba:
+
+- **Respuesta:** log(EUI).
+- **Historia:** log de la última EUI válida hasta $a-2$ (sin historia, la mediana de log(EUI) del entrenamiento, con indicadora); indicadora de historia antigua (última EUI anterior a $a-2$) y log de la EUI de $a-3$ (si falta, se repite la última, con indicadora).
+- **Uso** (último registro $\leq a-2$): uso principal, fracción de superficie del uso principal y número de usos; un faltante toma la mediana del entrenamiento, con indicadora.
+- **Edificio:** log de la superficie, fracción de estacionamiento, antigüedad, log de pisos y log de número de edificios (un 0 toma la mediana del entrenamiento), tipo y barrio.
+- **Categorías:** con menos de 30 filas de entrenamiento pasan a «Otro»; un valor ausente, a «Sin dato»; una categoría no vista, a la más frecuente.
+
+Son 16 predictores; con las indicadoras de categorías, el lasso usa en promedio `r coef_lasso[2]` columnas, que glmnet estandariza internamente. Los modelos se ajustan sobre log(EUI) y predicen con exp(). Si el residuo en log tiene mediana 0, exp() de la predicción es la mediana condicional de la EUI, que es la predicción que minimiza el error absoluto esperado y, por tanto, la coherente con el MAE. No buscamos la media condicional, que exigiría un factor de corrección. El supuesto se comprueba en la sección 5.1.
+
+## Procedimientos y expectativas
+
+Los tres métodos se describen en James et al. (2021, caps. 6 a 8). Las expectativas se escribieron antes de ajustar:
+
+- **M1, lasso** (Tibshirani, 1996; glmnet, Friedman et al., 2010): persistencia en escala log, porque la historia entra en forma lineal, más ajustes aditivos por tipo, uso, tamaño y barrio, con selección de variables por la penalización. Puede fallar si los efectos no son lineales en log o cambian según el tipo.
+- **M2, GAM** (Wood, 2017; mgcv): además, curvas suaves para historia, tamaño y antigüedad, con splines de regresión cuya suavidad se elige por REML (Wood, 2011). No captura interacciones, y con la historia de $a-2$ y la de $a-3$ juntas puede haber concurvidad.
+- **M3, bosque aleatorio** (Breiman, 2001; ranger, Wright y Ziegler, 2017): capta interacciones como tipo × historia sin especificarlas. No extrapola fuera del rango visto y puede apoyarse en reconocer edificios ya vistos.
+
+## Búsqueda de hiperparámetros y costo
+
+Lasso: 20 valores de $\lambda$ en escala logarítmica, desde el que anula todos los coeficientes en la primera ventana (`r lam_txt(lambda(lam_bus$config[lam_bus$complejidad == 1]))`) hasta su milésima parte; una sola corrida por ventana entrega toda la grilla. GAM: tres fórmulas de complejidad creciente. G1 tiene una curva para la historia, las indicadoras de historia y el tipo; G2 agrega curvas para superficie y antigüedad, uso, barrio, estacionamiento y pisos; G3 agrega una curva para $a-3$ y las demás variables. Bosque: 300 árboles, `mtry` en {3, 5, 8, 12} y tamaño mínimo de nodo en {5, 20, 50}, 12 configuraciones; el error fuera de bolsa no se usa para elegir. Son 35 configuraciones, dentro del máximo de 20 por familia, evaluadas en las tres ventanas (Anexo A.1). La búsqueda completa tomó `r num(v(tiem, "segundos_busqueda", modelo = "bosque"), 0)` s para el bosque, `r num(v(tiem, "segundos_busqueda", modelo = "gam"), 0)` s para el GAM y `r if (v(tiem, "segundos_busqueda", modelo = "lasso") < 1) "menos de 1 s" else paste(num(v(tiem, "segundos_busqueda", modelo = "lasso"), 0), "s")` para el lasso, con un núcleo.
+
+# Resultados
+
+## Desarrollo: validación en 2019–2021
+
+```{r tabla-desarrollo}
+orden <- c("referencia", "lasso", "gam", "bosque")
+etiqueta <- c(referencia = "Referencia", lasso = "Lasso (elegido)", gam = "GAM", bosque = "Bosque")
+config <- c(referencia = "—", lasso = paste0("$\\lambda$ = ", lam_txt(lam_el)), gam = cfg("gam"),
+            bosque = cfg("bosque"))
+d <- data.frame(
+  Procedimiento = etiqueta[orden], `Configuración` = config[orden],
+  MAE = num(sapply(orden, mae_d), 2), RMSE = num(sapply(orden, function(m) v(comp, "RMSE", modelo = m)), 1),
+  `Dif.` = c("—", sig(sapply(orden[-1], function(m) v(incd, "dif_MAE", modelo = m)))),
+  `IC 95 %` = c("—", sapply(orden[-1], function(m) ic(v(incd, "li_95", modelo = m), v(incd, "ls_95", modelo = m)))),
+  `Dif. 2019` = c("—", sig(sapply(orden[-1], dif_v, a = 2019))),
+  `Dif. 2020` = c("—", sig(sapply(orden[-1], dif_v, a = 2020))),
+  `Dif. 2021` = c("—", sig(sapply(orden[-1], dif_v, a = 2021))),
+  check.names = FALSE)
+tabla(d, paste0("Comparación en desarrollo: ", ent(n_val), " filas de validación (2019–2021), las mismas para todos. MAE y RMSE en kBtu/pie². La referencia predice la EUI de $a-2$ (si falta, la mediana del tipo). «Dif.» es el MAE del procedimiento menos el de la referencia en las mismas filas, reunido y por ventana; el intervalo remuestrea edificios con predicciones fijas."),
+      align = c("l", "l", rep("r", 7)), sep = "5pt")
+```
+
+Ningún procedimiento superó a la referencia en el MAE reunido de desarrollo (Tabla 3). El lasso, elegido por tener el menor MAE de los tres, quedó `r num(v(comp, "dif_MAE_vs_ref", modelo = "lasso"), 2)` kBtu/pie² sobre la referencia, con intervalo `r ic(v(incd, "li_95", modelo = "lasso"), v(incd, "ls_95", modelo = "lasso"))`. Las diferencias por ventana cambian de signo: los tres modelos pierden en 2019 y el lasso gana en 2020 y 2021. Las diferencias entre los tres modelos (MAE entre `r num(min(sapply(c("lasso", "gam", "bosque"), mae_d)), 2)` y `r num(max(sapply(c("lasso", "gam", "bosque"), mae_d)), 2)`) son mucho menores que la variación entre ventanas, así que el orden entre familias es frágil. El lasso es además el más simple de interpretar y el más barato: conserva en promedio `r coef_lasso[1]` de `r coef_lasso[2]` coeficientes, frente a `r num(edf_gam, 1)` grados de libertad efectivos del GAM y 300 árboles del bosque.
+
+**Supuestos.** Dentro del entrenamiento, la mediana del residuo en log está entre `r num(min(rent$mediana_entren), 3)` y `r num(max(rent$mediana_entren), 3)` para los tres modelos, así que exp() entrega la mediana condicional en los años de ajuste. Fuera de muestra es negativa (lasso: `r num(v(rven, "mediana", modelo = "lasso", ventana = 2019), 3)`, `r num(v(rven, "mediana", modelo = "lasso", ventana = 2020), 3)` y `r num(v(rven, "mediana", modelo = "lasso", ventana = 2021), 3)` en 2019, 2020 y 2021): los modelos sobrestiman por un choque común por año. La mediana del cambio de log(EUI) respecto de $a-2$ fue `r sig(v(camb, "mediana", anio = 2017), 3)` en 2017, el único año de entrenamiento de la ventana 1, y `r num(v(camb, "mediana", anio = 2019), 3)` en 2019 (Figura 3B): un modelo entrenado con años de alza no anticipa uno de baja, mientras que la persistencia no aprende tendencias. El residuo en log tiene asimetría negativa (`r num(v(rlog, "asimetria", modelo = "lasso"), 1)` en el lasso) por caídas grandes de consumo; la pendiente de calibración es `r num(v(rlog, "pendiente_calibracion", modelo = "lasso"), 2)`, y la mediana del error absoluto en log se mantiene entre `r num(min(disp$mediana_abs_residuo_log[disp$modelo == "lasso"]), 2)` y `r num(max(disp$mediana_abs_residuo_log[disp$modelo == "lasso"]), 2)` en los quintiles del nivel predicho, aunque la predicción mediana va de `r ent(min(disp$pred_mediana[disp$modelo == "lasso"]))` a `r ent(max(disp$pred_mediana[disp$modelo == "lasso"]))` kBtu/pie²: el error relativo es casi estable y el absoluto crece con el nivel, lo que respalda la escala log. En el GAM, la prueba de dimensión de base de mgcv no indica falta de flexibilidad (índice `r num(gk[["k-index"]], 2)`, valor p `r num(gk[["p-value"]], 2)`) y la concurvidad de la curva de historia es baja (`r num(v(gc, "s(log_hist)", medida = "worst"), 2)` en el peor caso); el valor cercano a 1 de la parte paramétrica refleja que las indicadoras de tipo casi suman la constante. El lasso conserva entre `r min(table(lvar$ventana))` y `r max(table(lvar$ventana))` coeficientes según la ventana, y el de la historia es siempre el mayor (Anexo A.6).
+
+## Prueba: evaluación única en 2023–2024
+
+```{r tabla-prueba}
+orden_p <- c("referencia", "referencia_ultima", "lasso", "gam", "bosque")
+etiqueta_p <- c(referencia = "Referencia: EUI de $a-2$", referencia_ultima = "Ref. alternativa: última EUI",
+                lasso = "Lasso (elegido)", gam = paste("GAM", cfg("gam")), bosque = "Bosque")
+d <- data.frame(
+  Procedimiento = etiqueta_p[orden_p],
+  MAE = num(sapply(orden_p, mae_p), 2), RMSE = num(sapply(orden_p, rmse_p), 1),
+  `Dif. MAE` = c("—", sig(sapply(orden_p[-1], function(m) v(mp, "dif_MAE_vs_ref", modelo = m, anio = "reunidos")))),
+  `IC 95 %` = c("—", "—", sapply(c("lasso", "gam", "bosque"), ic_p)),
+  `MAE 2023` = num(sapply(orden_p, mae_p, a = "2023"), 2),
+  `MAE 2024` = num(sapply(orden_p, mae_p, a = "2024"), 2),
+  check.names = FALSE)
+tabla(d, paste0("Comparación en prueba: ", ent(n_pru), " filas de ", ent(e_pru), " edificios (", ent(v(mp, "n", modelo = "lasso", anio = "2023")), " en 2023 y ", ent(v(mp, "n", modelo = "lasso", anio = "2024")), " en 2024), las mismas para todos. MAE y RMSE en kBtu/pie². «Dif.» es la diferencia de MAE con la referencia de la ficha; el intervalo remuestrea edificios con predicciones fijas. GAM y bosque se informan, pero no se usaron para elegir."),
+      align = c("l", rep("r", 6)))
+```
+
+En la prueba el lasso tuvo un MAE de `r num(mae_p("lasso"), 2)` kBtu/pie², `r num(-dif_p("lasso"), 2)` menos que la referencia de la ficha (`r num(mae_p("referencia"), 2)`), con intervalo `r ic_p("lasso")` (Tabla 4). La ventaja fue mayor en 2024 (`r num(dif_p("lasso", a = "2024"), 2)`; `r ic_p("lasso", a = "2024")`) que en 2023 (`r num(dif_p("lasso", a = "2023"), 2)`; `r ic_p("lasso", a = "2023")`, que incluye el 0). El GAM y el bosque, informados sin intervenir en la elección, también superaron a la referencia; el bosque tuvo el menor MAE (`r num(mae_p("bosque"), 2)`), pero cambiar de procedimiento después de ver la prueba invalidaría la evaluación. El RMSE del lasso (`r num(rmse_p("lasso"), 1)`) es menor que el de la referencia, pero mayor que el de la referencia alternativa (`r num(rmse_p("referencia_ultima"), 1)`), porque comete algunos errores muy grandes (sección 5.3).
+
+```{r tabla-historia}
+grupos <- c("EUI en a-2", "Solo historia anterior", "Sin historia")
+etiqueta_h <- c("EUI en a-2" = "EUI en $a-2$", "Solo historia anterior" = "Solo historia anterior a $a-2$",
+                "Sin historia" = "Sin historia")
+d <- data.frame(
+  `Historia disponible` = etiqueta_h[grupos], n = ent(sapply(grupos, h, col = "n")),
+  `Ref.` = num(sapply(grupos, h, col = "referencia"), 2),
+  `Ref. alt.` = num(sapply(grupos, h, col = "referencia_ultima"), 2),
+  Lasso = num(sapply(grupos, h, col = "lasso"), 2), GAM = num(sapply(grupos, h, col = "gam"), 2),
+  Bosque = num(sapply(grupos, h, col = "bosque"), 2),
+  `Aporte a la dif. del lasso` = sig(sapply(grupos, aporte), 3), check.names = FALSE)
+tabla(d, paste0("MAE en prueba (kBtu/pie²) según la historia disponible. El aporte es la diferencia de MAE del lasso con la referencia en el grupo, ponderada por su fracción de filas; los tres aportes suman ", num(dif_p("lasso"), 3), "."),
+      align = c("l", rep("r", 7)))
+```
+
+¿Por qué el lasso gana en prueba y no en desarrollo? La Tabla 5 separa las filas según la historia disponible. En las `r ent(h("EUI en a-2", "n"))` filas con EUI en $a-2$, la ventaja del lasso es pequeña (`r num(h("EUI en a-2", "lasso"), 2)` frente a `r num(h("EUI en a-2", "referencia"), 2)`). En las `r ent(h("Solo historia anterior", "n"))` filas que solo tienen historia más antigua, la referencia de la ficha usa la mediana del tipo y su MAE es `r num(h("Solo historia anterior", "referencia"), 2)`; el lasso, que usa la última EUI, baja a `r num(h("Solo historia anterior", "lasso"), 2)`. Esas filas aportan `r num(-aporte("Solo historia anterior"), 2)` de los `r num(-dif_p("lasso"), 2)` de ventaja, y en desarrollo eran apenas `r val[["Solo historia anterior"]]`. La referencia alternativa, que también usa la última EUI, obtiene `r num(h("Solo historia anterior", "referencia_ultima"), 2)` en ese grupo. Frente a ella, el lasso gana `r num(-dif_p("lasso", "referencia_ultima"), 2)` en total, con intervalo `r ic_p("lasso", "referencia_ultima")`, y el signo cambia entre años (2023: `r sig(dif_p("lasso", "referencia_ultima", "2023"))`; 2024: `r sig(dif_p("lasso", "referencia_ultima", "2024"))`). Sin historia, el lasso mejora a la mediana del tipo en `r num(-v(dhist, "lasso_menos_ref", historia = "Sin historia"), 1)` kBtu/pie².
+
+## Análisis de errores
+
+**Choques por año y pandemia.** La Figura 3A muestra que el error de todos los procedimientos cambia más entre años que entre procedimientos, y que el signo de la ventaja del lasso cambia de un año a otro. En 2021 todos tienen su mayor MAE (entre `r num(min(unlist(pmae[pmae$anio == 2021, c("referencia", "referencia_ultima", "lasso", "gam", "bosque")])), 2)` y `r num(max(unlist(pmae[pmae$anio == 2021, c("referencia", "referencia_ultima", "lasso", "gam", "bosque")])), 2)`). La Figura 3B muestra el cambio de cada edificio respecto de $a-2$: en 2020 y 2021 el rango intercuartil fue el mayor del período (`r num(ric[["2020"]], 3)` y `r num(ric[["2021"]], 3)`, frente a `r num(min(ric[!names(ric) %in% c("2020", "2021")]), 2)`–`r num(max(ric[!names(ric) %in% c("2020", "2021")]), 2)` en los demás años). En los edificios no residenciales la mediana del cambio fue `r num(cambio_tipo("NonResidential", 2020), 3)` en log en 2020 (`r pct(exp(cambio_tipo("NonResidential", 2020)) - 1, 0)`) y `r num(cambio_tipo("NonResidential", 2021), 3)` en 2021, mientras en los multifamiliares de 5 a 9 pisos fue `r if (all(mr_cambio == 0)) "0 en ambos años" else paste(num(mr_cambio[1], 3), "y", num(mr_cambio[2], 3))`. Ese choque común de la pandemia hace que el desempeño en un año no garantice el del siguiente (pandemia por tipo en el Anexo A.7).
+
+```{r fig-anios, fig.cap = "Error por año y choques comunes. A: MAE (kBtu/pie²) del lasso y de las dos referencias en cada año evaluado; en desarrollo, cada año usa su propia ventana y en prueba el ajuste final. B: mediana (punto) y rango intercuartil (RIC, barra) del cambio log(EUI de $a$ / EUI de $a-2$) en los edificios con ambos valores. La figura muestra que el error cambia más entre años que entre procedimientos y que en 2020–2021 los cambios fueron más dispersos, lo que limita trasladar el resultado de un año a otro.", out.width = "100%"}
+knitr::include_graphics(file.path(R, "fig3_error_y_cambio_por_anio.png"))
+```
+
+**Subgrupos.** Por tipo de edificio, el lasso mejora a la referencia alternativa en multifamiliares y escuelas, y es peor en hospitales (`r sig(v(dtipo, "lasso_menos_ultima", buildingtype = "Hospital"), 1)`), edificios no residenciales (`r sig(v(dtipo, "lasso_menos_ultima", buildingtype = "NonResidential"), 1)`) y universidades (`r sig(v(dtipo, "lasso_menos_ultima", buildingtype = "University"), 1)`, solo `r v(dtipo, "n", buildingtype = "University")` filas). Por tamaño, es mejor en los tres quintiles menores de superficie y peor en los dos mayores (Tabla 6). Por uso principal (Anexo A.8), mejora a la referencia alternativa en vivienda multifamiliar (`r sig(uso("Multifamily Housing"), 1)`), bodegas, escuelas (`r sig(uso("K-12 School"), 1)`) y lugares de culto, casi la iguala en oficinas (`r sig(uso("Office"), 1)`) y es peor en hoteles (`r sig(uso("Hotel"), 1)`), comercio minorista y el grupo de usos poco frecuentes (`r sig(uso("Otros usos"), 1)`).
+
+```{r tabla-subgrupos}
+cols <- c("referencia", "referencia_ultima", "lasso", "gam", "bosque")
+armar <- function(d, nombre, etiquetas) data.frame(
+  Grupo = etiquetas, n = ent(d$n), `Ref.` = num(d$referencia, 2), `Ref. alt.` = num(d$referencia_ultima, 2),
+  Lasso = num(d$lasso, 2), GAM = num(d$gam, 2), Bosque = num(d$bosque, 2),
+  `Lasso − ref. alt.` = sig(d$lasso_menos_ultima, 2), check.names = FALSE)
+tipos_es <- c(Hospital = "Hospital", "Multifamily HR (10+)" = "Multifamiliar, 10 o más pisos",
+              "Multifamily LR (1-4)" = "Multifamiliar, 1 a 4 pisos", "Multifamily MR (5-9)" = "Multifamiliar, 5 a 9 pisos",
+              NonResidential = "No residencial", School = "Escuela", University = "Universidad")
+tam_es <- dtam$tamano_pie2
+cifras <- gregexpr("[0-9]{4,}", tam_es)
+regmatches(tam_es, cifras) <- lapply(regmatches(tam_es, cifras), function(x) ent(as.numeric(x)))
+tam_es <- sub("^Q([1-5]): (.*)$", "Superficie Q\\1 (\\2)", gsub(" a ", "–", gsub(">=", "≥", tam_es)))
+d <- rbind(armar(dtipo, "Tipo", tipos_es[dtipo$buildingtype]), armar(dtam, "Tamaño", tam_es))
+tabla(d, "MAE en prueba (kBtu/pie²) por tipo de edificio y por quintil de superficie (pie², cortes del entrenamiento final). Mismas filas para todos los procedimientos en cada grupo.",
+      align = c("l", rep("r", 7)))
+```
+
+**Consumo extremo.** En las `r v(dext, "n", consumo_previo = ext_g)` filas cuya última EUI supera el percentil 99 del entrenamiento (`r ent(umbral_p99)` kBtu/pie²), el MAE del lasso es `r num(v(dext, "lasso", consumo_previo = ext_g), 1)`, frente a `r num(v(dext, "referencia_ultima", consumo_previo = ext_g), 1)` de la referencia alternativa, y su predicción queda en mediana `r num(-v(dsesgo, "mediana_pred_menos_y", consumo_previo = ext_g, modelo = "lasso"), 1)` kBtu/pie² bajo lo observado (Figura 4). La razón es estructural: en el lasso final la suma de los coeficientes de la historia (`r num(b_hist, 2)` + `r num(b_a3, 2)` = `r num(b_hist + b_a3, 2)`) es menor que 1, así que en escala log la predicción se acerca al centro de la distribución y los valores muy altos se subestiman. En el resto de las filas el lasso es mejor que la referencia alternativa (`r num(v(dext, "lasso", consumo_previo = "Resto"), 2)` frente a `r num(v(dext, "referencia_ultima", consumo_previo = "Resto"), 2)`). El 1 % de las filas con mayor error concentra el `r pct(conc("lasso", "parte_MAE_top1"))` del error absoluto y el `r pct(conc("lasso", "parte_cuadrados_top1"))` del error cuadrático del lasso: el RMSE depende de pocos edificios (Anexo A.9).
+
+```{r fig-extremos, fig.cap = paste0("EUI observada frente a predicha por el lasso en la prueba, en escala logarítmica (kBtu/pie²). Los puntos negros son las ", v(dext, "n", consumo_previo = ext_g), " filas cuya última EUI supera el percentil 99 del entrenamiento (", round(umbral_p99), " kBtu/pie²); la línea discontinua marca predicción igual a observación. La figura muestra dónde el modelo no es confiable: en consumos extremos la predicción queda bajo lo observado.")}
+knitr::include_graphics(file.path(R, "fig4_observado_vs_predicho_prueba.png"), dpi = 300)
+```
+
+**Error por edificio.** Si cada edificio pesa lo mismo, el MAE es `r num(ed("lasso", "MAE_por_edificio"), 2)` para el lasso, `r num(ed("referencia_ultima", "MAE_por_edificio"), 2)` para la referencia alternativa y `r num(ed("referencia", "MAE_por_edificio"), 2)` para la de la ficha. El error dividido por la mediana del tipo da el mismo orden (`r num(ed("lasso", "error_relativo_tipo"), 3)`, `r num(ed("referencia_ultima", "error_relativo_tipo"), 3)` y `r num(ed("referencia", "error_relativo_tipo"), 3)`): el error típico equivale a casi un cuarto del nivel de su tipo.
+
+## Sensibilidades
+
+```{r tabla-sensibilidad}
+orden_s <- c("referencia", "lasso", "gam", "bosque")
+d <- data.frame(
+  Procedimiento = c("Referencia", "Lasso", "GAM", "Bosque"),
+  `MAE base (log)` = num(sapply(orden_s, mae_d), 2),
+  `S1: MAE en escala original` = c("—", num(sapply(orden_s[-1], function(m) s1v("original", m, "MAE")), 2)),
+  `S2: cambio, excluidos` = sig(sapply(orden_s, s2v, g = "Excluidos del ajuste"), 2),
+  `S2: cambio, incluidos` = sig(sapply(orden_s, s2v, g = "Incluidos"), 2),
+  `Sin regla: MAE, mismas filas` = num(sapply(orden_s, regv, ver = "Sin regla, filas válidas"), 2),
+  check.names = FALSE)
+tabla(d, paste0("Sensibilidades en desarrollo (", ent(n_val), " filas de validación; MAE en kBtu/pie²). S1 repite la búsqueda sin transformar la respuesta. S2 saca de todos los entrenamientos el 20 % de los edificios y muestra el cambio del MAE en esos edificios y en los demás. La última columna rehace la base sin la regla de errores de registro y evalúa en las mismas filas válidas."),
+      align = c("l", rep(col_r("2.3cm"), 5)))
+```
+
+**S1, respuesta original frente a logarítmica (decisión de representación).** Repetimos toda la búsqueda con la EUI sin transformar, y también la historia sin log, con las mismas ventanas, filas y presupuesto (Tabla 7). En escala original los tres procedimientos empeoran: el MAE reunido sube a `r num(s1v("original", "lasso", "MAE"), 2)` (lasso), `r num(s1v("original", "gam", "MAE"), 2)` (GAM) y `r num(s1v("original", "bosque", "MAE"), 2)` (bosque), entre `r num(min(sapply(c("lasso", "gam", "bosque"), function(m) s1v("original", m, "MAE") - s1v("log", m, "MAE"))), 1)` y `r num(max(sapply(c("lasso", "gam", "bosque"), function(m) s1v("original", m, "MAE") - s1v("log", m, "MAE"))), 1)` sobre sus versiones en log. El RMSE del lasso y del GAM baja levemente (lasso: `r num(s1v("original", "lasso", "RMSE"), 1)` frente a `r num(s1v("log", "lasso", "RMSE"), 1)`), como se espera al estimar la media condicional por mínimos cuadrados en lugar de la mediana, y el GAM G3 en escala original produce `r ent(v(s1b, "predicciones_negativas", modelo = "gam", config = "G3"))` predicciones negativas. La conclusión no cambia: el lasso sigue siendo el de menor MAE, ningún modelo supera a la referencia y la escala log es la que corresponde a la métrica principal.
+
+**S2, edificios excluidos del ajuste (decisión de población y validación).** Sacamos de todos los entrenamientos un 20 % de los edificios de desarrollo, elegido al azar con semilla fija (`r ent(round(0.2 * e_dev))` edificios, de los que `r ent(s2v("lasso", "Excluidos del ajuste", "edificios"))` aparecen en validación), y comparamos en las mismas filas. Para esos edificios nuevos para el modelo, el MAE sube `r num(s2v("lasso", "Excluidos del ajuste"), 2)` en el lasso, `r num(s2v("gam", "Excluidos del ajuste"), 2)` en el GAM y `r num(s2v("bosque", "Excluidos del ajuste"), 2)` en el bosque; en los demás sube menos de 0,1. La conclusión de desarrollo no cambia: sobre todas las filas, el lasso de esta corrida (MAE `r num(s2_reunido("lasso"), 2)`) sigue siendo el mejor de los tres, pero no supera a la referencia (`r num(s2_reunido("referencia"), 2)`). El bosque depende más de haber visto al edificio, mientras el lasso, apoyado en la historia propia, se traslada mejor a edificios que el ajuste no conoce. Su ventaja en prueba (`r num(mae_p("bosque"), 2)`) podría no repetirse con edificios nuevos.
+
+**Control de la regla de errores de registro.** Sin la regla, en las mismas filas válidas, el MAE de la referencia sube de `r num(regv("referencia", "Con regla"), 2)` a `r num(regv("referencia", "Sin regla, filas válidas"), 2)` y su RMSE de `r num(regv("referencia", "Con regla", "RMSE"), 1)` a `r num(regv("referencia", "Sin regla, filas válidas", "RMSE"), 1)`, porque los registros erróneos pasan a ser historia; el bosque casi no cambia. Si además se evalúan las `r v(reg, "n", modelo = "lasso", version = "Sin regla, todas sus filas") - n_val` filas erróneas, el MAE de todos sube a `r num(min(reg$MAE[reg$version == "Sin regla, todas sus filas"]), 1)`–`r num(max(reg$MAE[reg$version == "Sin regla, todas sus filas"]), 1)` y el RMSE a cerca de `r ent(round(mean(reg$RMSE[reg$version == "Sin regla, todas sus filas"]), -2))`: sin la regla, unas pocas filas dominarían la comparación.
+
+# Discusión
+
+## Respuesta a la pregunta
+
+Con información hasta $a-2$, la EUI anual de un edificio conocido se anticipa con un MAE cercano a 10 kBtu/pie², alrededor de un cuarto del nivel típico de su tipo. Casi toda la información útil está en la historia del propio edificio: cuando existe la EUI de $a-2$, el lasso apenas mejora a la persistencia, y su ventaja frente a la referencia de la ficha viene de usar la última EUI cuando falta la de $a-2$. Los atributos del edificio ayudan sobre todo cuando no hay historia. Los coeficientes del lasso (Anexo A.2) son asociaciones predictivas condicionadas a las demás variables; con predictores correlacionados, como superficie, pisos y tipo, no deben leerse como efectos causales.
+
+## Utilidad y condiciones de uso
+
+En desarrollo el lasso no superó a la referencia, y en prueba su ganancia frente a una persistencia bien construida, la referencia alternativa fijada antes de abrir la prueba, es de `r num(-dif_p("lasso", "referencia_ultima"), 2)` kBtu/pie² con un intervalo que incluye el 0: una ganancia pequeña e incierta, que no justifica por sí sola la mayor complejidad. Como herramienta para el programa, sugerimos:
+
+- **Con historia:** usar la última EUI reportada hasta $a-2$; el lasso rinde casi igual, es más complejo y es menos confiable en edificios grandes, hospitales, universidades y consumos extremos.
+- **Sin historia:** usar el lasso, que mejora a la mediana del tipo en `r num(-v(dhist, "lasso_menos_ref", historia = "Sin historia"), 1)` kBtu/pie² (`r ent(h("Sin historia", "n"))` filas).
+- **Consumo previo extremo** (≥ `r ent(umbral_p99)` kBtu/pie²): no usar el lasso, que subestima.
+- **Cada año:** reajustar con los nuevos reportes y revisar si hubo un choque común, porque ningún modelo entrenado con años anteriores lo anticipa.
+
+Esta sugerencia proviene de comparaciones definidas antes de abrir la prueba, pero se apoya en dos años: no cambia el procedimiento elegido ni el resultado informado, y conviene confirmarla con años nuevos.
+
+## Límites de generalización
+
+La evaluación es retrospectiva: usamos la versión descargada en 2026, que pudo corregir reportes antiguos, y atributos que la base repite con su valor actual. La población son edificios del programa con un reporte válido en el año objetivo; no sabemos cuánto erraríamos en edificios que no reportaron, y los edificios sin historia tienen errores mucho mayores (MAE de `r num(h("Sin historia", "lasso"), 1)` en prueba). La prueba cubre dos años posteriores a la pandemia, y los intervalos son condicionales a los ajustes: no incluyen la variación entre años, que en desarrollo cambió el signo de las diferencias. Los umbrales de la regla de calidad son una decisión; el control de la sección 5.4 muestra su efecto.
+
+## Errores detectados y su corrección
+
+- **Regla de selección con ventanas dependientes.** El plan inicial usaba la regla de un error estándar, con el error estándar calculado como la desviación estándar de los tres MAE dividida por $\sqrt{3}$. Las ventanas comparten edificios y datos de entrenamiento, y los choques por año inflan esa desviación; con ella se elegía un lasso mucho más penalizado ($\lambda$ = `r lam_txt(lambda(lam_bus$config[lam_bus$complejidad == pos_1ee]))`, MAE `r num(lam_bus$MAE[lam_bus$complejidad == pos_1ee], 2)`). Lo corregimos antes de abrir la prueba con la regla del menor MAE reunido (EYP3407, 2026: clase S10 y enunciado 4.3), y el lasso elegido pasó a $\lambda$ = `r lam_txt(lam_el)`.
+- **Orden de categorías dependiente del idioma.** El orden alfabético de R depende de la configuración regional y define la categoría base del lasso, así que en otro computador el ajuste podía cambiar. Lo detectamos después de evaluar la prueba y fijamos el orden en `analisis.R` (`LC_COLLATE = C`). Todas las tablas y predicciones de las secciones 1 a 3 salieron idénticas byte a byte: los resultados no cambiaron.
+- **Tiempos dentro de una tabla de resultados.** Una columna de segundos impedía comprobar la reproducción byte a byte; la movimos a `tiempos_busqueda.csv` antes de la prueba.
+- **Fuga, prueba y duplicados.** Ninguna verificación encontró fuga (sección 3.2), la prueba se evaluó una sola vez con decisiones congeladas, la clave edificio–año es única y cada exclusión está documentada con su efecto.
+
+# Reproducibilidad y contribuciones
+
+```{r reproducibilidad}
+git_corto <- tryCatch(suppressWarnings(system2("git", c("rev-parse", "--short", "HEAD"),
+                                               stdout = TRUE, stderr = FALSE)),
+                      error = function(e) character(0))
+git_sucio <- tryCatch(suppressWarnings(system2("git", c("status", "--porcelain", "--", "analisis.R", "R", "informe.Rmd"),
+                                               stdout = TRUE, stderr = FALSE)),
+                      error = function(e) character(0))
+version_repo <- if (length(git_corto) == 1 && nzchar(git_corto)) {
+  paste0("commit `", git_corto, "`", if (length(git_sucio) > 0) " (con cambios sin confirmar en el código)" else "")
+} else "no disponible, porque la copia ejecutada no tiene historial de git"
+md5_datos <- unname(tools::md5sum("datos/datos.csv"))
+paquetes <- c("dplyr", "glmnet", "mgcv", "ranger", "rmarkdown", "knitr")
+# Versión de cada paquete: la del espacio de nombres cargado y, si no, la instalada.
+version_paquete <- function(p) {
+  v <- tryCatch(as.character(getNamespaceVersion(p)), error = function(e) NA_character_)
+  if (length(v) != 1 || is.na(v)) v <- tryCatch(as.character(utils::packageVersion(p)), error = function(e) "sin dato")
+  unname(v)
+}
+versiones <- paste0(paquetes, " ", vapply(paquetes, version_paquete, ""),
+                    collapse = ", ")
+```
+
+- **Comando:** `Rscript --vanilla analisis.R`, desde la raíz del repositorio y con el paquete de datos descomprimido en `datos/`. Ejecuta la preparación, las particiones, el ajuste, la evaluación, las figuras y este informe.
+- **Versión del repositorio:** `r version_repo`. Enlace: [completar con el enlace público].
+- **Entradas:** `caso04_seattle_edificios.zip`, descomprimido en `datos/` con sus tres archivos: `datos.csv`, `diccionario.csv` y `LEEME.txt`.
+- **Huella de la entrada:** md5 de `datos.csv`, `r md5_datos`.
+- **Entorno y tiempo:** `r if (!is.null(tej)) paste0(sub("^R version ([0-9.]+).*$", "R \\1", tej$r), " (R Core Team, ", R.version$year, ") en ", tej$sistema, ", ", tej$nucleos, " núcleos; el análisis tomó ", num(tej$segundos_analisis / 60, 1), " minutos, más la generación de este informe") else "[se completa al ejecutar analisis.R]"`. Paquetes: `r versiones`. Semilla 3407 para el bosque, el remuestreo y la muestra de S2; los modelos usan un núcleo.
+- **Salidas:** tablas, predicciones y figuras en `resultados/`; las decisiones congeladas antes de la prueba y su registro de cambios, en `CONGELADO.md`; la prueba desde una copia limpia, en `README.md`.
+- **Contribuciones:** [completar con la síntesis de los aportes de cada integrante].
+- **Declaración de uso de IA:** [pendiente].
+
+# Referencias {-}
+
+Breiman, L. (2001). Random forests. *Machine Learning*, 45(1), 5–32.
+
+City of Seattle, Office of Sustainability and Environment (2026). *Building Energy Benchmarking Data, 2015-Present* [conjunto de datos `teqw-tu6e`, dominio público]. Portal de datos abiertos de Seattle, <https://data.seattle.gov>. Copia con los registros 2015–2024 preparada para el curso el 12 de octubre de 2026.
+
+Davison, A. C. y Hinkley, D. V. (1997). *Bootstrap Methods and their Application*. Cambridge University Press.
+
+EYP3407 (2026). *Proyecto aplicado: enunciado, ficha del caso 04 y rúbrica*; *Clase S10: selección de variables*. Pontificia Universidad Católica de Chile.
+
+Friedman, J., Hastie, T. y Tibshirani, R. (2010). Regularization paths for generalized linear models via coordinate descent. *Journal of Statistical Software*, 33(1), 1–22.
+
+Hyndman, R. J. y Athanasopoulos, G. (2021). *Forecasting: Principles and Practice* (3.ª ed.). OTexts.
+
+James, G., Witten, D., Hastie, T. y Tibshirani, R. (2021). *An Introduction to Statistical Learning with Applications in R* (2.ª ed.). Springer.
+
+R Core Team (`r R.version$year`). *R: A Language and Environment for Statistical Computing*. R Foundation for Statistical Computing, Viena.
+
+Tibshirani, R. (1996). Regression shrinkage and selection via the lasso. *Journal of the Royal Statistical Society: Series B*, 58(1), 267–288.
+
+Wood, S. N. (2011). Fast stable restricted maximum likelihood and marginal likelihood estimation of semiparametric generalized linear models. *Journal of the Royal Statistical Society: Series B*, 73(1), 3–36.
+
+Wood, S. N. (2017). *Generalized Additive Models: An Introduction with R* (2.ª ed.). Chapman and Hall/CRC.
+
+Wright, M. N. y Ziegler, A. (2017). ranger: A fast implementation of random forests for high dimensional data in C++ and R. *Journal of Statistical Software*, 77(1), 1–17.
+
+\newpage
+\appendix
+
+# Anexo técnico
+
+## Búsqueda completa en desarrollo
+
+```{r anexo-busqueda}
+b <- bus
+b$Familia <- c(lasso = "Lasso", gam = "GAM", bosque = "Bosque")[b$modelo]
+b$`Configuración` <- ifelse(b$modelo == "lasso", paste0("$\\lambda$ = ", lam_txt(lambda(b$config))),
+                           gsub("=", " ", b$config))
+b$orden <- match(b$modelo, c("lasso", "gam", "bosque"))
+b <- b[order(b$orden, ifelse(is.na(b$complejidad), b$MAE, b$complejidad)), ]
+el <- paste(comp$modelo, comp$config)
+d <- data.frame(Familia = b$Familia, `Configuración` = paste0(b$`Configuración`, ifelse(paste(b$modelo, b$config) %in% el, " (elegida)", "")),
+                MAE = num(b$MAE, 2), RMSE = num(b$RMSE, 1), `MAE 2019` = num(b$MAE_2019, 2),
+                `MAE 2020` = num(b$MAE_2020, 2), `MAE 2021` = num(b$MAE_2021, 2), check.names = FALSE)
+tabla(d, paste0("Las 35 configuraciones evaluadas en las tres ventanas (", ent(n_val), " filas). MAE y RMSE reunidos en kBtu/pie². Lasso en orden de penalización decreciente; GAM de G1 a G3; bosque ordenado por MAE."),
+      align = c("l", "l", rep("r", 5)), posicion = "H")
+```
+
+## Coeficientes del lasso final
+
+```{r anexo-coeficientes}
+cf <- coefs
+nombres_num <- c("(Intercept)" = "Constante", log_hist = "log(última EUI válida hasta $a-2$)",
+                 sin_hist = "Sin historia", hist_antigua = "Historia anterior a $a-2$",
+                 log_a3 = "log(EUI de $a-3$)", falta_a3 = "Falta la EUI de $a-3$",
+                 frac_uso = "Fracción del uso principal", falta_frac = "Falta la fracción del uso",
+                 n_usos = "Número de usos", log_superficie = "log(superficie)",
+                 frac_estacionamiento = "Fracción de estacionamiento", antiguedad = "Antigüedad",
+                 log_pisos = "log(pisos)", log_edif = "log(número de edificios)")
+cf$variable <- ifelse(cf$variable %in% names(nombres_num), nombres_num[cf$variable],
+                      sub("^tipo", "Tipo: ", sub("^uso", "Uso: ", sub("^barrio", "Barrio: ", cf$variable))))
+fmt_coef <- function(x) ifelse(abs(x) < 0.0005, num(x, 4), num(x, 3))
+mitad <- ceiling(nrow(cf) / 2)
+izq <- cf[1:mitad, ]; der <- cf[(mitad + 1):nrow(cf), ]
+d <- data.frame(Variable = izq$variable, Coeficiente = fmt_coef(izq$coeficiente),
+                `Variable ` = c(der$variable, rep("", mitad - nrow(der))),
+                `Coeficiente ` = c(fmt_coef(der$coeficiente), rep("", mitad - nrow(der))), check.names = FALSE)
+tabla(d, paste0("Coeficientes distintos de 0 del lasso ajustado con los objetivos 2017–2021 ($\\lambda$ = ", lam_txt(lam_el), "), en escala de log(EUI) y en las unidades originales de cada predictor (glmnet estandariza los predictores para penalizar, pero entrega los coeficientes en sus unidades). Cada indicadora de categoría se compara con la categoría base de su variable. Son asociaciones predictivas, no efectos causales."),
+      align = c("l", "r", "l", "r"), letra = "footnotesize", posicion = "H")
+```
+
+## Datos por año y distribución de la respuesta
+
+```{r anexo-anios}
+anios <- 2015:2024
+d <- data.frame(`Año` = anios,
+                Filas = ent(sapply(anios, function(a) if (a %in% falt$anio) v(falt, "filas", anio = a) else NA)),
+                `Sin respuesta` = ent(sapply(anios, function(a) if (a %in% falt$anio) v(falt, "sin_respuesta", anio = a) else NA)),
+                Altas = ent(sapply(anios, function(a) if (a %in% ab$anio) v(ab, "altas", anio = a) else NA)),
+                Bajas = ent(sapply(anios, function(a) if (a %in% ab$anio) v(ab, "bajas", anio = a) else NA)),
+                check.names = FALSE)
+todos <- rbind(pares, paresp)
+d$`Objetivo: EUI en $a-2$` <- ent(sapply(anios, function(a) if (a %in% todos$anio) v(todos, "EUI en a-2", anio = a) else NA))
+d$`Solo historia anterior` <- ent(sapply(anios, function(a) if (a %in% todos$anio) v(todos, "Solo historia anterior", anio = a) else NA))
+d$`Sin historia` <- ent(sapply(anios, function(a) if (a %in% todos$anio) v(todos, "Sin historia", anio = a) else NA))
+tabla(d, "Registros por año, respuestas faltantes, altas y bajas de edificios respecto del año anterior (2015–2022, sin mirar la prueba) y filas objetivo válidas según la historia disponible (2017–2021 y 2023–2024).",
+      align = c("l", rep("r", 7)), posicion = "H")
+```
+
+```{r anexo-respuesta}
+r2 <- resp
+d <- data.frame(Escala = c("EUI (kBtu/pie²)", "log(EUI)"), check.names = FALSE,
+                `Mín.` = num(r2[["0%"]], 2), p1 = num(r2[["1%"]], 2), p25 = num(r2[["25%"]], 2),
+                Mediana = num(r2[["50%"]], 2), p75 = num(r2[["75%"]], 2), p99 = num(r2[["99%"]], 2),
+                `Máx.` = num(r2[["100%"]], 2), Media = num(r2$media, 2))
+tabla(d, paste0("Distribución de la respuesta en las ", ent(n_dev), " filas de desarrollo."), align = c("l", rep("r", 8)),
+      posicion = "H")
+```
+
+## Auditoría de columnas
+
+```{r anexo-columnas}
+a <- audc
+mitad <- ceiling(nrow(a) / 2)
+izq <- a[1:mitad, ]; der <- a[(mitad + 1):nrow(a), ]
+d <- data.frame(Columna = paste0("`", izq$columna, "`"), Cambios = ent(izq$edificios_con_cambios),
+                Faltante = pct(izq$fraccion_faltante),
+                `Columna ` = c(paste0("`", der$columna, "`"), rep("", mitad - nrow(der))),
+                `Cambios ` = c(ent(der$edificios_con_cambios), rep("", mitad - nrow(der))),
+                `Faltante ` = c(pct(der$fraccion_faltante), rep("", mitad - nrow(der))), check.names = FALSE)
+tabla(d, paste0("Columnas no clave en 2015–2022: número de edificios en que el valor cambia entre años (0 indica un valor actual copiado a todos los años) y porcentaje de filas faltantes. Hay ", ent(v(aud, "valor", indicador = "Edificios 2015-2022")), " edificios en esos años."),
+      align = c("l", "r", "r", "l", "r", "r"), letra = "footnotesize", sep = "4pt", posicion = "H")
+```
+
+## Errores de registro y saltos grandes
+
+```{r anexo-errores}
+s <- saltos[saltos$error_registro, ]
+d <- data.frame(Edificio = s$osebuildingid, `Año` = s$datayear, Tipo = s$buildingtype,
+                EUI = num(s$eui, 1), `Mediana previa` = num(s$mediana_previa, 1), Veces = num(s$veces, 0),
+                check.names = FALSE)
+tabla(d, paste0("Registros de 2015–2022 marcados por la regla (EUI > 10 veces la mediana previa del edificio y > 1000 kBtu/pie²). Otros ", sum(!saltos$error_registro), " saltos de más de 10 veces no se marcan porque su nivel es posible."),
+      align = c("r", "r", "l", "r", "r", "r"), posicion = "H")
+```
+
+## Supuestos y estabilidad
+
+```{r anexo-supuestos}
+mods_es <- c(lasso = "Lasso", gam = "GAM", bosque = "Bosque", referencia = "Referencia")
+filas_s <- expand.grid(ventana = 2019:2021, modelo = c("lasso", "gam", "bosque"), stringsAsFactors = FALSE)
+d <- data.frame(Modelo = mods_es[filas_s$modelo], Ventana = filas_s$ventana,
+                `Mediana en entrenamiento` = num(mapply(function(m, w) v(rent, "mediana_entren", modelo = m, ventana = w), filas_s$modelo, filas_s$ventana), 3),
+                `Mediana fuera de muestra` = num(mapply(function(m, w) v(rven, "mediana", modelo = m, ventana = w), filas_s$modelo, filas_s$ventana), 3),
+                `Media fuera de muestra` = num(mapply(function(m, w) v(rven, "media", modelo = m, ventana = w), filas_s$modelo, filas_s$ventana), 3),
+                `Coef. lasso no nulos` = ifelse(filas_s$modelo == "lasso", as.character(table(lvar$ventana)[as.character(filas_s$ventana)]), "—"),
+                check.names = FALSE)
+tabla(d, "Residuo en log (log de la EUI observada menos la predicción en log) dentro del entrenamiento de cada ventana (bosque: fuera de bolsa) y en su año de validación, y número de coeficientes del lasso distintos de 0.",
+      align = c("l", "r", rep(col_r("2.4cm"), 4)), posicion = "H")
+```
+
+## Cambio respecto de $a-2$ por tipo de edificio
+
+```{r anexo-pandemia}
+anios_c <- c("2017", "2018", "2019", "2020", "2021", "2023", "2024")
+d <- data.frame(Tipo = tipos_es[ptipo$buildingtype], check.names = FALSE)
+for (a in anios_c) d[[a]] <- num(ptipo[[a]], 3)
+tabla(d, "Mediana del cambio log(EUI de $a$ / EUI de $a-2$) por tipo de edificio y año objetivo, en los edificios con ambos valores.",
+      align = c("l", rep("r", length(anios_c))), posicion = "H")
+```
+
+## Error por uso principal en prueba
+
+```{r anexo-usos}
+uso_es <- c("Multifamily Housing" = "Vivienda multifamiliar", "Office" = "Oficinas",
+            "Non-Refrigerated Warehouse" = "Bodega no refrigerada", "K-12 School" = "Escuela (K-12)",
+            "Retail Store" = "Comercio minorista", "Other" = "«Other» de la fuente", "Hotel" = "Hotel",
+            "Worship Facility" = "Lugar de culto", "Otros usos" = "Otros usos",
+            "Sin uso previo" = "Sin registro de uso $\\leq a-2$")
+du <- dusos[order(dusos$uso_grupo %in% c("Otros usos", "Sin uso previo"), -dusos$n), ]
+d <- armar(du, "Uso", ifelse(du$uso_grupo %in% names(uso_es), uso_es[du$uso_grupo], du$uso_grupo))
+tabla(d, "MAE en prueba (kBtu/pie²) por uso principal del último registro $\\leq a-2$. Conservan su nombre los usos con al menos 300 filas en el entrenamiento final, una regla que no mira la prueba; «Otros usos» reúne los demás. Mismas filas para todos los procedimientos en cada grupo.",
+      align = c("l", rep("r", 7)), posicion = "H")
+```
+
+## Mayores errores del lasso en prueba
+
+```{r anexo-mayores}
+m <- head(dmay, 10)
+d <- data.frame(Edificio = m$osebuildingid, `Año` = m$datayear, `Uso previo` = m$uso_prev,
+                `Última EUI` = num(m$ultima_eui, 1), Observada = num(m$y, 1), Lasso = num(m$pred, 1),
+                Referencia = num(m$pred_ref, 1), check.names = FALSE)
+tabla(d, "Las diez filas de prueba con mayor error absoluto del lasso (EUI en kBtu/pie²).",
+      align = c("r", "r", "l", rep("r", 4)), posicion = "H")
+```

@@ -1,0 +1,4 @@
+"modelo","historia","n","MAE","RMSE"
+"referencia","EUI en a-2",9488,21.62705504128,543.050327413858
+"referencia","Sin historia",480,18.5797918364208,36.6702679574015
+"referencia","Solo historia anterior",74,23.3020273467838,34.6739575962596

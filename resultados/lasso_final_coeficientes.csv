@@ -1,0 +1,30 @@
+"variable","coeficiente"
+"(Intercept)",0.462248739088265
+"log_hist",0.673878262243921
+"log_a3",0.186606082212953
+"falta_a3",0.0790416804606012
+"log_superficie",0.00052561855452896
+"frac_estacionamiento",0.0176548312721037
+"log_edif",0.00499185366289241
+"tipoUniversity",0.0709260988701742
+"usoDistribution Center",-0.0146036394262898
+"usoHospital (General Medical & Surgical)",0.223855676666824
+"usoHotel",-0.00407980380265535
+"usoK-12 School",0.00781682520980581
+"usoLaboratory",0.209228293907406
+"usoMedical Office",0.08556358748738
+"usoNon-Refrigerated Warehouse",-0.0145616195266752
+"usoOffice",-0.000274687558451143
+"usoOther",0.0121066950174073
+"usoOtro",0.056642396662084
+"usoSelf-Storage Facility",-0.100161144752722
+"usoSenior Living Community",0.0118471927688793
+"usoSin dato",-0.142014841848108
+"usoSupermarket/Grocery Store",0.162258243963342
+"usoVehicle Repair Services",0.0195878131896366
+"barrioEAST",0.0114931991095422
+"barrioGREATER DUWAMISH",-0.00144110285222058
+"barrioLAKE UNION",0.0174647323459507
+"barrioMAGNOLIA / QUEEN ANNE",-0.000384990673924506
+"barrioNORTH",-0.0176439695537694
+"barrioNORTHEAST",0.00513980255017837

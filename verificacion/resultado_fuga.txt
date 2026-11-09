@@ -1,0 +1,23 @@
+Prueba de fuga de información (verificacion/fuga.R)
+Fecha: 2026-11-09 02:54 UTC
+Entorno: R version 4.3.3 (2024-02-29) en Ubuntu 24.04.5 LTS
+Tiempo: 10.9 minutos
+
+La corrida sin alterar reproduce byte a byte resultados/predicciones_elegidas.csv: sí.
+Configuraciones comparadas en desarrollo: 35, más la referencia.
+
+respuesta_alterada: fracción de filas comunes cuya EUI del año evaluado cambió con la alteración.
+max_dif_modelos: mayor diferencia absoluta entre predicciones (kBtu/pie²) en las filas comunes;
+  en desarrollo, sobre las 35 configuraciones; en prueba, sobre los cinco procedimientos.
+control_2021_cambia: en desarrollo, la mayor diferencia en la ventana 2021, que sí usa años alterados.
+
+      parte corte anio_evaluado filas_comunes respuesta_alterada max_dif_modelos max_dif_referencia control_2021_cambia                  resultado
+ desarrollo  2017          2019          3218                  1             0.0                  0            936.7456                  idénticas
+ desarrollo  2018          2020          3264                  1             0.0                  0            939.7814                  idénticas
+ desarrollo  2019          2021          2939                  1             0.0                  0                  NA                  idénticas
+     prueba  2021          2023          3253                  1             0.0                 NA                  NA                  idénticas
+     prueba  2021          2024          3275                  1          1582.9                 NA                  NA cambian (control esperado)
+     prueba  2022          2023          3297                  1             0.0                 NA                  NA                  idénticas
+     prueba  2022          2024          3323                  1             0.0                 NA                  NA                  idénticas
+
+Conclusión: ninguna predicción que debía usar solo años <= corte cambió, y los controles sí cambiaron.

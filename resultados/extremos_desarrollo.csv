@@ -1,0 +1,11 @@
+"osebuildingid","datayear","buildingtype","uso_prev","eui","eui_a2"
+49780,2021,"NonResidential","Data Center",1538.099976,1167.400024
+49780,2020,"NonResidential","Data Center",1421.900024,1059
+49780,2019,"NonResidential","Data Center",1167.400024,833.7000122
+49780,2018,"NonResidential","Data Center",1059,694.7000122
+365,2018,"University","Data Center",958.5,834.4000244
+365,2019,"University","Data Center",925.0999756,924.4000244
+365,2017,"University","Data Center",924.4000244,787.2000122
+365,2020,"University","Data Center",910.9000244,958.5
+365,2021,"University","Data Center",909.9000244,925.0999756
+49780,2017,"NonResidential","Data Center",833.7000122,543
