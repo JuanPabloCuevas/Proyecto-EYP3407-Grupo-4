@@ -99,7 +99,11 @@ presentacion.pdf       [pendiente]
 - **Comando:** `Rscript --vanilla analisis.R`
 - **Resultado:** terminó sin errores ni advertencias en 4,2 minutos y generó `informe.pdf` (19 páginas) y 75 archivos en `resultados/`. Frente a la corrida anterior, del 8 de noviembre, 68 de sus 71 archivos quedaron idénticos byte a byte, entre ellos todas las tablas y predicciones; cambiaron la Figura 4, que se achicó, y los segundos de `tiempos_busqueda.csv` y `tiempo_ejecucion.csv`. Los cuatro archivos nuevos son `diag_prueba_uso.csv`, `auditoria_complementaria.csv`, `uniones.csv` y `categorias_entrenamiento_final.csv`.
 - **Prueba de fuga:** `Rscript --vanilla verificacion/fuga.R` en la misma copia, el 9 de noviembre de 2026 a las 02:44 UTC; tardó 10,9 minutos. Al alterar la EUI y los usos de los años posteriores a cada corte, las predicciones de las 35 configuraciones y de la referencia en 2019–2021, y las de los cinco procedimientos en 2023–2024, quedaron idénticas; las que sí usaban años alterados cambiaron. El detalle queda en `verificacion/resultado_fuga.txt`.
-- **Prueba del equipo en otro computador (enunciado 6.3):** [pendiente: fecha, integrante, sistema operativo, versión de R, comando y resultado].
+- **Prueba del equipo en otro computador (enunciado 6.3):** 9 de noviembre de 2026, 16:15–16:25 (hora de Chile), por Juan Pablo Cuevas.
+  - *Entorno:* Windows 11 x64 (build 26200), 12 núcleos; R 4.5.3 con dplyr 1.2.1, glmnet 5.2, mgcv 1.9-5, ranger 0.18.0, rmarkdown 2.32 y knitr 1.52; pandoc 3.13 y TinyTeX (TeX Live 2025). Los paquetes se instalaron con `install.packages()` y pandoc con `winget`.
+  - *Copia:* carpeta nueva fuera del repositorio con `analisis.R`, `R/`, `informe.Rmd`, `CONGELADO.md`, `README.md`, `.gitignore`, `verificacion/` y `datos/` (md5 de `datos.csv` igual al de la tabla de arriba), sin `resultados/` ni `informe.pdf`.
+  - *Comando:* `Rscript --vanilla analisis.R`
+  - *Resultado:* terminó sin errores ni advertencias en 9,8 minutos y generó `informe.pdf` y `resultados/`. Frente a los resultados del repositorio, la referencia, el lasso (coeficientes, métricas y predicciones) y el bosque salieron idénticos; el GAM difiere como máximo en 2,3 × 10⁻¹⁰ kBtu/pie², atribuible a la versión de mgcv. Ninguna cifra del informe cambia.
 
 ## Contribuciones
 
