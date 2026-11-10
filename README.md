@@ -73,8 +73,9 @@ R/03_prueba.R          ajuste final y evaluación única en 2023-2024, con remue
 R/04_diagnostico.R     análisis de errores (tipo, uso, tamaño, historia, extremos), sensibilidades S1 y S2,
                        control de la regla, figuras 3 y 4
 R/05_informe.R         figuras 1 y 2; auditorías de columnas, superficies, identificadores, uniones y
-                       categorías; tiempo de ejecución e informe
+                       categorías; descripción de la respuesta; tiempo de ejecución e informe
 informe.Rmd            fuente ejecutable del informe
+plantilla/              plantilla de informes UC adaptada (style.cls, plantilla de pandoc y logos)
 informe.pdf            informe generado
 CONGELADO.md           decisiones congeladas antes de abrir la prueba y registro de cambios
 verificacion/fuga.R    prueba de fuga de información (opcional; analisis.R no la ejecuta)
@@ -107,8 +108,35 @@ presentacion.pdf       [pendiente]
 
 ## Contribuciones
 
-[completar: síntesis de los aportes de cada integrante]
+- **Maximiliano León.** Coordiné el desarrollo del análisis con apoyo de IA. Definí los requisitos a partir del enunciado y la rúbrica, revisé y aprobé cada etapa (auditoría, partición temporal, modelos, prueba e informe) y pedí correcciones. Contrasté la versión final con los avances de Cristóbal y Juan Pablo para decidir qué incorporar. Ejecuté el informe en mi computador y preparé el repositorio.
+- **Juan Pablo Cuevas.** Creé el repositorio. Desarrollé con apoyo de IA un análisis paralelo e independiente, con un registro de decisiones fundamentado en las sesiones del curso: lectura y sellado de la prueba, auditoría y análisis descriptivo, base analítica con ventanas temporales, y comparación de lasso/ridge, GAM y bosque. Lo presenté al equipo en un informe interno de revisión del procedimiento. Con ese análisis contrasté la versión final: replica la construcción de la muestra, la regla de errores de registro y la conclusión de desarrollo, y cuantifica el efecto de esos errores sobre el MAE y la regla de un error estándar. Colaboré en la redacción del informe final, realicé la prueba de reproducción en otro computador (Windows 11) y elaboré la presentación.
+- **Cristóbal Honorato.** Realicé la auditoría y preparación de los datos: selección de las 19 variables, análisis y tratamiento de datos faltantes y de errores de registro en la respuesta, y descripción de la muestra. Además, construí la base analítica con predictores desfasados a a − 2 y definí las particiones temporales de validación.
+- **Michelle Houngbo.** Determiné las sensibilidades del análisis, colaboré en la redacción del informe y en la creación de la presentación.
 
 ## Declaración de uso de IA
 
-[pendiente]
+Cada integrante declara la herramienta, las fechas, el propósito, las partes afectadas y las comprobaciones realizadas (enunciado 6.4).
+
+**Maximiliano León**
+
+- **Herramienta:** Claude (Anthropic), en Claude Code Opus 5.5, del 6 al 9 de noviembre de 2026.
+- **Propósito y partes afectadas:** depurar el código (`analisis.R` y `R/01`–`05`), `README.md`, `CONGELADO.md`, y revisión del cumplimiento del enunciado.
+- **Comprobaciones:** el análisis se ejecutó completo desde una copia limpia (resultados idénticos byte a byte) y pasó la prueba de fuga. El informe calcula sus cifras desde `resultados/` y, al compilarse, comprueba 50 afirmaciones del texto contra los resultados; las referencias se revisaron una por una. Cada sección se revisó y autorizó antes de avanzar. No se cargaron datos personales; los datos son públicos.
+
+**Juan Pablo Cuevas**
+
+- **Herramienta:** Claude (Anthropic), modelo Claude Opus 5.5, del 7 al 10 de noviembre de 2026.
+- **Propósito y partes afectadas:** programar y depurar el análisis paralelo (no incluido en el código final), redactar el registro de decisiones y el informe interno de revisión, comparar ese análisis con el informe final, guiar la prueba de reproducción en Windows, y apoyar la redacción del informe final y el diseño de la presentación. En la entrega afecta al registro de esa prueba en este archivo, a las secciones del informe en que colaboré y a las diapositivas.
+- **Comprobaciones:** cada decisión se contrastó con las sesiones del curso antes de implementarla. El análisis paralelo se ejecutó completo y llegó a los mismos conteos que el final (24 654 filas objetivo, 16 657 de desarrollo, 7399 de prueba) y a los mismos 9 errores de registro. En la prueba de reproducción se compararon 23 archivos de resultados con los del repositorio: coinciden, salvo diferencias de 10⁻¹⁰ en el GAM. Las cifras de la presentación provienen de `resultados/`. No se cargaron datos personales; los datos son públicos.
+
+**Cristóbal Honorato**
+
+- **Herramienta:** Claude (Anthropic), [pendiente: modelo y fechas].
+- **Propósito y partes afectadas:** [pendiente].
+- **Comprobaciones:** [pendiente].
+
+**Michelle Houngbo**
+
+- **Herramienta:** otra herramienta de IA, [pendiente: fechas].
+- **Propósito y partes afectadas:** [pendiente].
+- **Comprobaciones:** [pendiente].

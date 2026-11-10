@@ -117,3 +117,31 @@ Después de la revisión solo se agregó a la cabecera de `analisis.R` una líne
 ## Versiones de paquetes en el informe
 
 2026-11-09, 13:15 UTC. En otro computador (Windows), `utils::packageDescription()` devolvió NA para un paquete y el informe se detenía en la sección de reproducibilidad. `informe.Rmd` ahora toma la versión del paquete cargado (`getNamespaceVersion()`) y, si no, la instalada. Solo cambia cómo se escribe esa línea del informe; el análisis, las tablas y las predicciones no cambian.
+
+## Redacción del informe, Figura 2 y descripción de la respuesta
+
+2026-11-09, 20:00 UTC. `R/01_base.R`, `R/02_modelos.R`, `R/03_prueba.R` y `R/04_diagnostico.R` no cambian. Ningún cambio toca la población, las variables, los ajustes, la selección ni las predicciones:
+
+1. `R/05_informe.R`: la Figura 2 se redibuja como una grilla de ajustes por año del reporte, con la misma información. Se agrega la sección 1d, que describe la respuesta en 2015–2022 sin los errores de registro: fracción de la variación entre edificios, persistencia respecto de $a-2$, cambio según el nivel y asimetría (`descriptiva_varianza.csv`, `descriptiva_persistencia.csv`, `descriptiva_cambio_nivel.csv` y `descriptiva_escala.csv`). Solo describe los datos y no lee la prueba.
+2. `informe.Rmd` y `plantilla/`: el informe usa la plantilla de informes UC (portada, encabezado y estilos), adaptada para generarse desde R Markdown con pdflatex. Redacción revisada y más breve (el cuerpo pasa de algo más de 12 a 11 páginas), descripción de la respuesta en la sección 2.2 y en el Anexo A.3, referencias a las clases del curso y seis comprobaciones nuevas para las afirmaciones agregadas.
+
+En una corrida completa, los archivos de tablas y predicciones de la versión anterior salieron idénticos byte a byte.
+
+```
+6715ad0d776e85f049f5ae0c03a23d2e  R/05_informe.R
+527ce493046cfb619104d8da1fcfe0b6  informe.Rmd
+a9851e0cfeb436af13911f5ec709c350  plantilla/style.cls
+feee272f96d8647f15ad937228a01c13  plantilla/informe-uc.tex
+```
+
+## Revisión de la redacción por el equipo
+
+2026-11-10, 18:00 UTC. Solo cambia `informe.Rmd`; el código del análisis, las tablas de `resultados/` y las predicciones no cambian:
+
+1. Redacción revisada por el equipo en todas las secciones y referencias en una página aparte; la descripción de la respuesta pasa a su propia sección (2.6) y las variables, a la 2.7. Se agregan contribuciones, declaración de IA, enlace del repositorio y citas a las sesiones S12, S14, S16 y S17.
+2. La Tabla 2 se agrupa por decisión (usadas y excluidas, separadas por una línea) y la Tabla 6 se reduce a la referencia alternativa y el lasso, en bloques por tipo y por quintil de superficie. Las cifras son las mismas.
+3. Dos comprobaciones nuevas: 35 configuraciones con a lo más 20 por familia, y mediana de predicción menos observación negativa en los consumos extremos.
+
+```
+fd2e29fe72a05ca2bf8ecdb51adc989c  informe.Rmd
+```

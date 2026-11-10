@@ -184,6 +184,76 @@ if (all(vapply(c("datos", "eui_a2", "eui_a3", "ultima", "usos", "dev", "prueba",
 }
 
 # -----------------------------------------------------------------------------
+# 1d. Descripción de la respuesta en desarrollo: cuánto de la variación de la EUI es
+#     entre edificios, cuánto persiste a dos años y en qué escala el cambio deja de
+#     depender del nivel. Solo describe los datos (EUI válidas, sin los errores de
+#     registro de R/01_base.R) y no mira la prueba: usa 2015-2022.
+# -----------------------------------------------------------------------------
+saltos_reg <- leer_resultado("saltos_2015_2022.csv")
+errores_reg <- paste(saltos_reg$osebuildingid[saltos_reg$error_registro],
+                     saltos_reg$datayear[saltos_reg$error_registro])
+desc_datos <- read.csv("datos/datos.csv", stringsAsFactors = FALSE, na.strings = c("", "NA"))
+desc_datos <- desc_datos[desc_datos$datayear <= 2022, ]
+eui_ok <- desc_datos[!is.na(desc_datos$siteeui_kbtu_sf) &
+                       !paste(desc_datos$osebuildingid, desc_datos$datayear) %in% errores_reg,
+                     c("osebuildingid", "datayear", "buildingtype", "siteeui_kbtu_sf")]
+rm(desc_datos)
+names(eui_ok)[4] <- "eui"
+stopifnot(min(eui_ok$eui) > 0)
+
+# Fracción de la suma de cuadrados de log(EUI) explicada por la media de cada edificio.
+pct_entre <- function(y, id) {
+  m <- ave(y, id)
+  sum((m - mean(y))^2) / sum((y - mean(y))^2)
+}
+grupos_var <- c(sort(unique(eui_ok$buildingtype)), "Todos")
+descriptiva_varianza <- do.call(rbind, lapply(grupos_var, function(g) {
+  x <- if (g == "Todos") eui_ok else eui_ok[eui_ok$buildingtype == g, ]
+  data.frame(grupo = g, edificios = length(unique(x$osebuildingid)), filas = nrow(x),
+             entre_edificios_log = pct_entre(log(x$eui), x$osebuildingid),
+             entre_edificios_original = pct_entre(x$eui, x$osebuildingid))
+}))
+guardar(descriptiva_varianza, "descriptiva_varianza.csv")
+
+# Persistencia: objetivos de desarrollo 2017-2021 con EUI válida exactamente en a-2.
+a2_ok <- data.frame(osebuildingid = eui_ok$osebuildingid, datayear = eui_ok$datayear + 2,
+                    eui_a2 = eui_ok$eui)
+pares_a2 <- merge(eui_ok[eui_ok$datayear %in% 2017:2021, ], a2_ok,
+                  by = c("osebuildingid", "datayear"))
+descriptiva_persistencia <- do.call(rbind, lapply(2017:2021, function(a) {
+  x <- pares_a2[pares_a2$datayear == a, ]
+  data.frame(anio = a, pares = nrow(x),
+             spearman = cor(x$eui, x$eui_a2, method = "spearman"),
+             pearson_log = cor(log(x$eui), log(x$eui_a2)),
+             mediana_cambio_log = median(log(x$eui / x$eui_a2)))
+}))
+guardar(descriptiva_persistencia, "descriptiva_persistencia.csv")
+
+# Escala: el cambio absoluto respecto de a-2 según el nivel de a-2 (deciles), en
+# kBtu/pie² y en log; y la asimetría de la respuesta de desarrollo en ambas escalas.
+asimetria_desc <- function(x) mean((x - mean(x))^3) / mean((x - mean(x))^2)^1.5
+cortes_dec <- quantile(pares_a2$eui_a2, seq(0, 1, 0.1))
+pares_a2$decil <- cut(pares_a2$eui_a2, cortes_dec, include.lowest = TRUE, labels = FALSE)
+descriptiva_cambio_nivel <- do.call(rbind, lapply(1:10, function(k) {
+  x <- pares_a2[pares_a2$decil == k, ]
+  data.frame(decil = k, pares = nrow(x), mediana_eui_a2 = median(x$eui_a2),
+             mediana_cambio_abs = median(abs(x$eui - x$eui_a2)),
+             mediana_cambio_abs_log = median(abs(log(x$eui / x$eui_a2))))
+}))
+guardar(descriptiva_cambio_nivel, "descriptiva_cambio_nivel.csv")
+dev_resp <- eui_ok$eui[eui_ok$datayear %in% 2017:2021]
+descriptiva_escala <- data.frame(
+  escala = c("original", "log"),
+  filas = length(dev_resp),
+  asimetria = c(asimetria_desc(dev_resp), asimetria_desc(log(dev_resp))),
+  spearman_nivel_cambio_abs = c(
+    cor(pares_a2$eui_a2, abs(pares_a2$eui - pares_a2$eui_a2), method = "spearman"),
+    cor(pares_a2$eui_a2, abs(log(pares_a2$eui / pares_a2$eui_a2)), method = "spearman")))
+guardar(descriptiva_escala, "descriptiva_escala.csv")
+rm(saltos_reg, errores_reg, eui_ok, pct_entre, grupos_var, a2_ok, pares_a2, asimetria_desc,
+   cortes_dec, dev_resp)
+
+# -----------------------------------------------------------------------------
 # 2. Figura 1: construcción de la muestra (cifras leídas de resultados/)
 # -----------------------------------------------------------------------------
 cas_d <- leer_resultado("cascada.csv")
@@ -258,47 +328,45 @@ for (cf in columnas_fig) {
 dev.off()
 
 # -----------------------------------------------------------------------------
-# 3. Figura 2: diseño temporal de las ventanas de desarrollo y de la prueba
+# 3. Figura 2: diseño temporal de las ventanas de desarrollo y del ajuste final
+#    Cada fila es un ajuste y cada casilla, un año del reporte: historia (solo
+#    predictores), objetivos de entrenamiento, año evaluado o año que no se usa.
 # -----------------------------------------------------------------------------
 filas_diseno <- list(
-  list(nombre = "Ventana 1", objetivo = 2019, entrena = 2017, rol = "V"),
-  list(nombre = "Ventana 2", objetivo = 2020, entrena = 2017:2018, rol = "V"),
-  list(nombre = "Ventana 3", objetivo = 2021, entrena = 2017:2019, rol = "V"),
-  list(nombre = "Final: prueba 2023", objetivo = 2023, entrena = 2017:2021, rol = "P"),
-  list(nombre = "Final: prueba 2024", objetivo = 2024, entrena = 2017:2021, rol = "P")
+  list(nombre = "Ventana 1", entrena = 2017, evalua = 2019, rol = "V"),
+  list(nombre = "Ventana 2", entrena = 2017:2018, evalua = 2020, rol = "V"),
+  list(nombre = "Ventana 3", entrena = 2017:2019, evalua = 2021, rol = "V"),
+  list(nombre = "Ajuste final", entrena = 2017:2021, evalua = c(2023, 2024), rol = "P")
 )
-colores_rol <- c(E = "#2a78d6", V = "#eb6834", P = "#eb6834", H = "#d9d9d6", N = "#ffffff")
-etiquetas_rol <- c(E = "E", V = "V", P = "P", H = "H", N = "")
-png(file.path(SALIDA, "fig2_diseno_temporal.png"), width = 6.5, height = 3.1, units = "in",
-    res = 300, pointsize = 10)
-par(mar = c(4.2, 9.2, 0.4, 0.6), las = 1)
+colores_rol <- c(H = "#c6dbef", E = "#2171b5", V = "#fd8d3c", P = "#d94801", N = "#ebebeb")
+etiquetas_rol <- c(H = "Solo historia (predictores)", E = "Entrenamiento (respuestas e historia)",
+                   V = "Validación", P = "Prueba", N = "No se usa")
+rol_anio <- function(f, a) {
+  if (a %in% f$evalua) return(f$rol)
+  if (a %in% f$entrena) return("E")
+  if (a <= max(f$evalua) - 2) return("H")
+  "N"
+}
 anios_d <- 2015:2024
-plot(NA, xlim = c(2014.5, 2024.5), ylim = c(0.4, length(filas_diseno) + 0.6), axes = FALSE,
-     xlab = "", ylab = "")
+png(file.path(SALIDA, "fig2_diseno_temporal.png"), width = 6.5, height = 2.6, units = "in",
+    res = 300, pointsize = 10)
+par(mar = c(5.0, 5.6, 0.3, 0.3), las = 1)
+plot(NA, xlim = c(2014.5, 2024.5), ylim = c(0.5, length(filas_diseno) + 0.5), axes = FALSE,
+     xlab = "", ylab = "", xaxs = "i", yaxs = "i")
 for (i in seq_along(filas_diseno)) {
   f <- filas_diseno[[i]]
   y <- length(filas_diseno) + 1 - i
   for (a in anios_d) {
-    rol <- if (a == f$objetivo) f$rol else if (a %in% f$entrena) "E" else
-      if (a <= f$objetivo - 2) "H" else "N"
-    borde <- if (rol == "N") "#c4c4c0" else "#ffffff"
-    rect(a - 0.46, y - 0.38, a + 0.46, y + 0.38, col = colores_rol[[rol]], border = borde)
-    if (a == f$objetivo - 1) text(a, y, "a\u22121", cex = 0.7, col = "#8a8a85")
-    if (rol %in% c("E", "V", "P")) text(a, y, etiquetas_rol[[rol]], cex = 0.75, col = "#ffffff",
-                                         font = 2)
-    if (rol == "H") text(a, y, "H", cex = 0.75, col = "#6b6b66", font = 2)
+    rect(a - 0.5, y - 0.5, a + 0.5, y + 0.5, col = colores_rol[[rol_anio(f, a)]],
+         border = "#ffffff", lwd = 2.5)
   }
-  mtext(f$nombre, side = 2, at = y, line = 0.4, cex = 0.8, col = "#1f1f1f")
+  mtext(f$nombre, side = 2, at = y, line = 0.3, cex = 0.85, col = "#4d4d4d")
 }
-abline(h = 2.5, lty = 2, col = "#8a8a85")
-axis(1, at = anios_d, tick = FALSE, line = -0.9, cex.axis = 0.8, col.axis = "#3d3d3a")
-legend(x = 2019.5, y = -0.2, xjust = 0.5, yjust = 1, xpd = NA, ncol = 2, bty = "n", cex = 0.75,
-       fill = c(colores_rol[["E"]], colores_rol[["H"]], colores_rol[["V"]], "#ffffff"),
-       border = c("#ffffff", "#ffffff", "#ffffff", "#c4c4c0"),
-       legend = c("E: objetivo de entrenamiento", "H: solo historia",
-                  "V / P: año evaluado (validación o prueba)",
-                  "Sin uso: a \u2212 1 (reporte incompleto) o posterior"),
-       text.col = "#3d3d3a")
+axis(1, at = anios_d, tick = FALSE, line = -0.8, cex.axis = 0.8, col.axis = "#4d4d4d")
+mtext("Año del reporte", side = 1, line = 1.5, cex = 0.9)
+legend(x = 2019.5, y = -0.55, xjust = 0.5, yjust = 1, xpd = NA, ncol = 5, bty = "n",
+       cex = 0.68, x.intersp = 0.4, text.width = NA, fill = colores_rol, border = NA,
+       legend = etiquetas_rol)
 dev.off()
 
 # -----------------------------------------------------------------------------

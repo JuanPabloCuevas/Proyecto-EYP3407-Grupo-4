@@ -1,0 +1,79 @@
+% Plantilla de pandoc para generar informe.Rmd con la plantilla de informes UC
+% (plantilla/style.cls). La usa el campo output: pdf_document: template de informe.Rmd.
+\documentclass{plantilla/style}
+
+% --- Definiciones que pandoc necesita ---------------------------------------
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{%
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi}
+\makeatother
+\providecommand{\passthrough}[1]{#1}
+$if(numbersections)$
+\setcounter{secnumdepth}{3}
+$else$
+\setcounter{secnumdepth}{-\maxdimen}
+$endif$
+\graphicspath{{./}}
+\renewcommand{\contentsname}{Índice de contenido}
+\renewcommand{\listfigurename}{Índice de figuras}
+\renewcommand{\listtablename}{Índice de tablas}
+\addto\captionsspanish{\renewcommand{\tablename}{Tabla}\renewcommand{\figurename}{Figura}}
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+\begin{document}
+
+% --- Encabezado de cada página ----------------------------------------------
+\fancyhead[L]{%
+  \begin{picture}(0,0) \put(-40,26){\includegraphics[width=15mm]{plantilla/img/logo-uc-3.pdf}} \end{picture}
+  \put(8,50){\textcolor{gray}{\scriptsize{\begin{tabular}{l}
+    PONTIFICIA UNIVERSIDAD CATÓLICA DE CHILE\\
+    FACULTAD DE MATEMÁTICAS\\
+    DEPARTAMENTO DE ESTADÍSTICA
+  \end{tabular}}}}
+}
+\rhead{}
+
+% --- Portada -----------------------------------------------------------------
+\begin{titlepage}
+\includegraphics[width=2cm]{plantilla/img/logo-uc-4.pdf}
+\vspace*{-2.2cm}
+
+\begin{tabular}{l}
+\hspace{2cm} PONTIFICIA UNIVERSIDAD CATÓLICA DE CHILE\\
+\hspace{2cm} FACULTAD DE MATEMÁTICAS\\
+\hspace{2cm} DEPARTAMENTO DE ESTADÍSTICA\\
+\end{tabular}
+
+\begin{center}
+\vspace{3cm}
+{\scshape\LARGE \textbf{$title$} \par}
+\rule{80mm}{0.1mm}
+
+{\itshape\Large $subtitle$ \par}
+\vfill
+{\Large \textbf{$grupo$} \par}
+\vspace{0.5cm}
+{\large \textbf{Integrantes:}\\\normalsize $for(author)$$author$$sep$, $endfor$ \par}
+
+\medskip
+\textbf{Fecha de entrega:} $date$
+\vspace{3cm}
+\end{center}
+\end{titlepage}
+\newpage
+
+% Sin índices: el informe es breve y la numeración de secciones basta (adaptación).
+\setstretch{1}
+
+$body$
+
+\end{document}
