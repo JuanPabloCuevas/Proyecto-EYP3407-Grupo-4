@@ -125,7 +125,7 @@ Después de la revisión solo se agregó a la cabecera de `analisis.R` una líne
 1. `R/05_informe.R`: la Figura 2 se redibuja como una grilla de ajustes por año del reporte, con la misma información. Se agrega la sección 1d, que describe la respuesta en 2015–2022 sin los errores de registro: fracción de la variación entre edificios, persistencia respecto de $a-2$, cambio según el nivel y asimetría (`descriptiva_varianza.csv`, `descriptiva_persistencia.csv`, `descriptiva_cambio_nivel.csv` y `descriptiva_escala.csv`). Solo describe los datos y no lee la prueba.
 2. `informe.Rmd` y `plantilla/`: el informe usa la plantilla de informes UC (portada, encabezado y estilos), adaptada para generarse desde R Markdown con pdflatex. Redacción revisada y más breve (el cuerpo pasa de algo más de 12 a 11 páginas), descripción de la respuesta en la sección 2.2 y en el Anexo A.3, referencias a las clases del curso y seis comprobaciones nuevas para las afirmaciones agregadas.
 
-En una corrida completa, los archivos de tablas y predicciones de la versión anterior salieron idénticos byte a byte.
+En una corrida completa, los archivos de tablas y predicciones de la versión anterior salieron iguales salvo redondeo de máquina.
 
 ```
 6715ad0d776e85f049f5ae0c03a23d2e  R/05_informe.R
@@ -145,3 +145,7 @@ feee272f96d8647f15ad937228a01c13  plantilla/informe-uc.tex
 ```
 fd2e29fe72a05ca2bf8ecdb51adc989c  informe.Rmd
 ```
+
+## Resultados regenerados en Windows
+
+2026-11-10. `resultados/` se regeneró con `Rscript --vanilla analisis.R` en Windows 11 (R 4.5.3). Frente a la versión anterior, las tablas y predicciones coinciden salvo redondeo de máquina (hasta 2,3 × 10⁻¹⁰ kBtu/pie² en el GAM y 1 × 10⁻¹³ en el lasso) y los fines de línea de Windows. Ninguna cifra del informe cambia.
