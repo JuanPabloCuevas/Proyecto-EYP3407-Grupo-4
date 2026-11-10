@@ -1,11 +1,11 @@
 "consumo_previo","modelo","n","mediana_pred_menos_y"
 "Resto","bosque",6939,-0.23556890982892
-"Resto","gam",6939,0.248376895267324
+"Resto","gam",6939,0.248376895262307
 "Resto","lasso",6939,0.00654335449688048
 "Resto","referencia",6939,1
 "Resto","referencia_ultima",6939,1
 "Última EUI >= 283 (p99)","bosque",62,-13.8007113340553
-"Última EUI >= 283 (p99)","gam",62,-22.5233782358766
+"Última EUI >= 283 (p99)","gam",62,-22.5233782359307
 "Última EUI >= 283 (p99)","lasso",62,-27.4377056245716
 "Última EUI >= 283 (p99)","referencia",62,19.55000305
 "Última EUI >= 283 (p99)","referencia_ultima",62,26.6999817
