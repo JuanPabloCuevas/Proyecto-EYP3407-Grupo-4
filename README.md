@@ -81,7 +81,7 @@ CONGELADO.md           decisiones congeladas antes de abrir la prueba y registro
 verificacion/fuga.R    prueba de fuga de información (opcional; analisis.R no la ejecuta)
 datos/                 archivos del paquete del caso
 resultados/            tablas, predicciones y figuras (se regeneran)
-presentacion.pdf       [pendiente]
+presentacion.pdf       diapositivas de la presentación, diagramadas en Canva con cifras y figuras de resultados/
 ```
 
 ## Control de ejecución
