@@ -45,7 +45,7 @@ install.packages(c("dplyr", "glmnet", "mgcv", "ranger", "rmarkdown", "knitr"))
 
 - **Archivo:** `caso04_seattle_edificios.zip`, copia preparada para el curso el 12 de octubre de 2026. Contiene `datos.csv` (34 699 registros edificio–año de 2015 a 2024, 46 columnas), `diccionario.csv` y `LEEME.txt`.
 - **Fuente:** City of Seattle, Office of Sustainability and Environment, *Building Energy Benchmarking Data, 2015-Present* (programa *Seattle Building Energy Benchmarking*), portal de datos abiertos de Seattle (data.seattle.gov), conjunto `teqw-tu6e`. `datos/LEEME.txt` registra la consulta a la API del portal con que se preparó la copia.
-- **Cómo obtenerlo:** [completar: enlace de descarga del .zip, por ejemplo el de Canvas del curso o el del propio repositorio]. Luego se descomprime en `datos/`, donde quedan los tres archivos sin subcarpetas:
+- **Cómo obtenerlo:** el paquete `caso04_seattle_edificios.zip` se descarga desde el Canvas del curso (material del caso 04). Sus tres archivos, sin editar, ya están en `datos/` de este repositorio (https://github.com/JuanPabloCuevas/Proyecto-EYP3407-Grupo-4/tree/main/datos), por lo que al clonar el repositorio o descomprimir la copia de entrega no hace falta descargar nada más. Si se parte del .zip original, se descomprime en `datos/`, donde quedan los tres archivos sin subcarpetas:
 
   ```
   unzip caso04_seattle_edificios.zip -d datos/
