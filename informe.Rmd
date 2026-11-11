@@ -299,11 +299,11 @@ afirmar(all(mr_cambio == 0) && cambio_tipo("NonResidential", 2020) < 0, "pandemi
 
 # Resumen ejecutivo
 
-El programa de reporte energético de Seattle recibe cada año la intensidad energética (EUI, en kBtu/pie²) de más de 3000 edificios, pero en enero del año $a$ el reporte de $a-1$ todavía está incompleto. Por lo tanto, evaluamos qué tan bien se puede anticipar la EUI anual de un edificio conocido usando solo información hasta $a-2$.
+El programa de reporte energético de Seattle recibe cada año la intensidad energética (EUI, en kBtu/pie²) de más de 3000 edificios, pero en enero del año $a$ el reporte de $a-1$ todavía está incompleto. Evaluamos qué tan bien se puede anticipar la EUI anual de un edificio conocido usando solo información hasta $a-2$.
 
-Con los años de validación 2019–2021, ningún modelo superó a la referencia de la ficha, que simplemente repite la EUI de $a-2$. Entre los tres procedimientos elegimos un lasso sobre log(EUI), el de menor error. En la prueba 2023–2024, el lasso se equivocó en promedio en `r num(mae_p("lasso"), 2)` kBtu/pie², `r num(-dif_p("lasso"), 2)` menos que la referencia (IC 95 %: `r ic_p("lasso")`). Sin embargo, casi toda esa ventaja (`r num(-aporte("Solo historia anterior"), 2)`) viene de `r ent(pru[["Solo historia anterior"]])` casos sin dato en $a-2$: ahí la referencia usa la mediana del tipo de edificio, mientras el lasso usa el último dato del edificio. Si la referencia también usa ese último dato, la diferencia baja a `r num(dif_p("lasso", "referencia_ultima"), 2)` kBtu/pie² y el intervalo `r ic_p("lasso", "referencia_ultima")` incluye el 0, es decir, no hay una mejora clara.
+Con los años de validación 2019–2021, ningún modelo superó a la referencia de la ficha, que repite la EUI de $a-2$. Entre los tres procedimientos elegimos un lasso sobre log(EUI), el de menor error. En la prueba 2023–2024, el lasso se equivocó en promedio en `r num(mae_p("lasso"), 2)` kBtu/pie², `r num(-dif_p("lasso"), 2)` menos que la referencia (IC 95 %: `r ic_p("lasso")`). Sin embargo, casi toda esa ventaja (`r num(-aporte("Solo historia anterior"), 2)`) viene de `r ent(pru[["Solo historia anterior"]])` casos sin dato en $a-2$: ahí la referencia usa la mediana del tipo de edificio, mientras el lasso usa el último dato del edificio. Si la referencia también usa ese último dato, la diferencia baja a `r num(dif_p("lasso", "referencia_ultima"), 2)` kBtu/pie² y el intervalo `r ic_p("lasso", "referencia_ultima")` incluye el 0: no hay mejora clara.
 
-Finalmente, recomendamos predecir la EUI con el último dato reportado por el propio edificio. El lasso sirve sobre todo para edificios sin historia, y no conviene usarlo en edificios de consumo muy alto (≥ `r ent(umbral_p99)` kBtu/pie²), porque subestima su consumo. La principal limitación es que la prueba cubre solo dos años, y choques que afectan a todos los edificios a la vez, como la pandemia, pueden cambiar los resultados de un año a otro.
+Recomendamos predecir la EUI con el último dato reportado por el propio edificio. El lasso sirve sobre todo para edificios sin historia, y no conviene usarlo en edificios de consumo muy alto (≥ `r ent(umbral_p99)` kBtu/pie²), porque lo subestima. La principal limitación es que la prueba cubre solo dos años, y choques comunes a todos los edificios, como la pandemia, pueden cambiar los resultados de un año a otro.
 
 # Problema y datos
 
@@ -606,11 +606,14 @@ version_repo <- if (length(git_corto) == 1 && nzchar(git_corto)) {
 } else "no disponible, porque la copia ejecutada no tiene historial de git"
 md5_datos <- unname(tools::md5sum("datos/datos.csv"))
 paquetes <- c("dplyr", "glmnet", "mgcv", "ranger", "rmarkdown", "knitr")
-# Versión de cada paquete: la del espacio de nombres cargado y, si no, la instalada.
+# Versión de cada paquete en la corrida que generó los resultados (resultados/sessionInfo.txt).
+# Si no aparece ahí, se usa la instalada en el computador donde se compila el informe.
+si_txt <- tryCatch(suppressWarnings(paste(readLines(file.path(R, "sessionInfo.txt"), warn = FALSE), collapse = " ")),
+                   error = function(e) "")
 version_paquete <- function(p) {
-  v <- tryCatch(as.character(getNamespaceVersion(p)), error = function(e) NA_character_)
-  if (length(v) != 1 || is.na(v)) v <- tryCatch(as.character(utils::packageVersion(p)), error = function(e) "sin dato")
-  unname(v)
+  m <- regmatches(si_txt, regexpr(paste0("(^|[^A-Za-z0-9.])", p, "_[0-9][0-9A-Za-z.-]*"), si_txt))
+  if (length(m) == 1) return(sub(paste0("^.*", p, "_"), "", m))
+  unname(tryCatch(as.character(utils::packageVersion(p)), error = function(e) "sin dato"))
 }
 versiones <- paste0(paquetes, " ", vapply(paquetes, version_paquete, ""),
                     collapse = ", ")
@@ -622,7 +625,7 @@ versiones <- paste0(paquetes, " ", vapply(paquetes, version_paquete, ""),
 - **Huella de la entrada:** md5 de `datos.csv`, `r md5_datos`.
 - **Entorno y tiempo:** `r if (!is.null(tej)) paste0(sub("^R version ([0-9.]+).*$", "R \\1", tej$r), " (R Core Team, ", R.version$year, ") en ", tej$sistema, ", ", tej$nucleos, " núcleos; el análisis tomó ", num(tej$segundos_analisis / 60, 1), " minutos, más la generación de este informe") else "[se completa al ejecutar analisis.R]"`. Paquetes: `r versiones`. Semilla 3407 para el bosque, el remuestreo y la muestra de S2; los modelos usan un núcleo.
 - **Salidas:** tablas, predicciones y figuras en `resultados/`; las decisiones congeladas antes de la prueba y su registro de cambios, en `CONGELADO.md`; la prueba desde una copia limpia, en `README.md`.
-- **Contribuciones:** Maximiliano León coordinó el análisis final y preparó el repositorio; Juan Pablo Cuevas desarrolló un análisis paralelo para contrastarlo, hizo la prueba de reproducción y elaboró la presentación; Cristóbal Honorato auditó y preparó los datos, construyó la base analítica y definió las particiones; Michelle Houngbo definió las sensibilidades y colaboró en la redacción del informe y en la presentación. Detalle en `README.md`.
+- **Contribuciones:** Maximiliano León coordinó y desarrolló el análisis final (código, validación, modelos, prueba e informe) y preparó el repositorio; Juan Pablo Cuevas desarrolló un análisis paralelo para contrastarlo, hizo la prueba de reproducción y elaboró la presentación; Cristóbal Honorato hizo la auditoría inicial de los datos y propuso la base analítica y las particiones; Michelle Houngbo revisó y validó las sensibilidades, colaboró en la redacción del informe y en la presentación. Detalle en `README.md`.
 - **Declaración de uso de IA:** Maximiliano León, Juan Pablo Cuevas y Cristóbal Honorato usaron Claude (Anthropic), y Michelle Houngbo otra herramienta de IA, como apoyo en programación, depuración y redacción. Las cifras del informe se verifican contra los resultados al compilar, y el análisis se reprodujo desde una copia limpia y en otro computador. Herramienta, fechas, propósito y partes afectadas de cada integrante, en `README.md`.
 
 \newpage
